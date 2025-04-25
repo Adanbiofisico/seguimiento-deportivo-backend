@@ -7,7 +7,7 @@ app = Flask(__name__)
 CORS(app)  # Permite el acceso desde cualquier origen
 
 # Conexión a la base de datos PostgreSQL usando la variable de entorno DATABASE_URL
-DATABASE_URL = os.getenv('postgresql://programadedeporte_user:CODWxfGlTODCro6SDVhWof2CmUd4wxB8@dpg-crr0apaj1k6c73e7m4ig-a/programadedeporte')
+DATABASE_URL = os.getenv('DATABASE_URL')
 
 # Función para obtener la conexión a la base de datos PostgreSQL
 def get_db():
