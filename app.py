@@ -183,6 +183,19 @@ def agregar_evento():
     return jsonify({"mensaje": "Evento agregado correctamente"})
 
 
+
+@app.route('/evaluaciones', methods=['GET'])
+def obtener_todas_evaluaciones():
+    resultado = {}
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            for tabla in ['evaluacion_psicologica', 'nutricion', 'medico', 'entrenamiento']:
+                cursor.execute(f'SELECT * FROM {tabla}')
+                rows = cursor.fetchall()
+                columnas = [desc[0] for desc in cursor.description]
+                resultado[tabla] = [dict(zip(columnas, row)) for row in rows]
+    return jsonify(resultado)
+
 # ------------------ MAIN ------------------
 
 if __name__ == '__main__':
