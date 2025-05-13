@@ -163,6 +163,26 @@ def entrenamiento():
 
     return jsonify({"mensaje": "Entrenamiento guardado correctamente"}), 200
 
+
+
+
+
+@app.route('/evaluaciones', methods=['GET'])
+def obtener_evaluaciones():
+    # Aquí puedes manejar la lógica para obtener las evaluaciones desde la base de datos
+    evaluaciones = # Obtener datos de la base de datos
+    return jsonify(evaluaciones)
+
+
+
+@app.route('/add_evento', methods=['POST'])
+def agregar_evento():
+    data = request.get_json()
+    evento = data.get('evento')  # Asegúrate de que el cuerpo de la solicitud tenga la información correcta
+    # Aquí agregas la lógica para almacenar el evento
+    return jsonify({"mensaje": "Evento agregado correctamente"})
+
+
 # ------------------ MAIN ------------------
 
 if __name__ == '__main__':
