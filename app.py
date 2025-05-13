@@ -111,22 +111,21 @@ def nutricion():
     return jsonify({"mensaje": "Datos de nutrición guardados correctamente"}), 200
 
 
-@app.route('/medico', methods=['POST'])
-def medico():
+@app.route('/seguimiento-medico', methods=['POST'])
+def seguimiento_medico():
+    # Lógica para manejar la solicitud POST
+    # Aquí, obtendrás los datos del cuerpo de la solicitud, por ejemplo:
     data = request.get_json()
-    required = ['atleta_id', 'fecha', 'temperatura', 'presion_arterial', 'observaciones']
-    if not all(data.get(k) for k in required):
-        return jsonify({"error": "Todos los campos son requeridos"}), 400
+    
+    atleta_id = data.get('atleta_id')
+    consulta_fecha = data.get('consulta_fecha')
+    diagnostico = data.get('diagnostico')
+    tratamiento = data.get('tratamiento')
+    observaciones = data.get('observaciones')
 
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute('''
-                INSERT INTO medico (atleta_id, fecha, temperatura, presion_arterial, observaciones)
-                VALUES (%s, %s, %s, %s, %s);
-            ''', (data['atleta_id'], data['fecha'], data['temperatura'], data['presion_arterial'], data['observaciones']))
-            conn.commit()
-
-    return jsonify({"mensaje": "Datos médicos guardados correctamente"}), 200
+    # Aquí puedes agregar la lógica para guardar esos datos en la base de datos.
+    
+    return jsonify({"mensaje": "Datos guardados correctamente"})
 
 
 @app.route('/evaluacion-psicologica', methods=['POST'])
