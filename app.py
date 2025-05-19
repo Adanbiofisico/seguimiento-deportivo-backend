@@ -178,6 +178,12 @@ def agregar_evento():
     return jsonify({"mensaje": "Evento agregado correctamente"}), 200
 
 
+
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({"estado": "API corriendo"}), 200
+
+
 # ------------------ MAIN ------------------
 
 if __name__ == '__main__':
