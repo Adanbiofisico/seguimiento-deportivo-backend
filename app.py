@@ -4,7 +4,7 @@ import psycopg2
 import os
 
 app = Flask(__name__)
-CORS(app)  # Permitir CORS
+CORS(app)
 
 # URL de conexión a PostgreSQL
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -44,18 +44,9 @@ def init_db():
                     id SERIAL PRIMARY KEY,
                     atleta_id TEXT,
                     fecha TEXT,
-                    temperatura REAL,
-                    presion_arterial TEXT,
+                    diagnostico TEXT,
+                    tratamiento TEXT,
                     observaciones TEXT
-                );
-            ''')
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS evaluacion_psicologica (
-                    id SERIAL PRIMARY KEY,
-                    atleta_id TEXT,
-                    estado_emocional TEXT,
-                    motivacion TEXT,
-                    estres TEXT
                 );
             ''')
             cursor.execute('''
@@ -66,6 +57,15 @@ def init_db():
                     duracion INTEGER,
                     intensidad TEXT,
                     observaciones TEXT
+                );
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS evento (
+                    id SERIAL PRIMARY KEY,
+                    nombre TEXT,
+                    fecha TEXT,
+                    lugar TEXT,
+                    descripcion TEXT
                 );
             ''')
             conn.commit()
@@ -79,7 +79,7 @@ init_db()
 def psicologia():
     data = request.get_json()
     required = ['atleta_id', 'estado_emocional', 'motivacion', 'estres']
-    if not all(data.get(k) for k in required):
+    if not data or not all(data.get(k) for k in required):
         return jsonify({"error": "Todos los campos son requeridos"}), 400
 
     with get_db() as conn:
@@ -97,7 +97,7 @@ def psicologia():
 def nutricion():
     data = request.get_json()
     required = ['atleta_id', 'fecha', 'peso', 'altura', 'imc', 'observaciones']
-    if not all(data.get(k) for k in required):
+    if not data or not all(data.get(k) for k in required):
         return jsonify({"error": "Todos los campos son requeridos"}), 400
 
     with get_db() as conn:
@@ -113,44 +113,27 @@ def nutricion():
 
 @app.route('/seguimiento-medico', methods=['POST'])
 def seguimiento_medico():
-    # Lógica para manejar la solicitud POST
-    # Aquí, obtendrás los datos del cuerpo de la solicitud, por ejemplo:
     data = request.get_json()
-    
-    atleta_id = data.get('atleta_id')
-    consulta_fecha = data.get('consulta_fecha')
-    diagnostico = data.get('diagnostico')
-    tratamiento = data.get('tratamiento')
-    observaciones = data.get('observaciones')
-
-    # Aquí puedes agregar la lógica para guardar esos datos en la base de datos.
-    
-    return jsonify({"mensaje": "Datos guardados correctamente"})
-
-
-@app.route('/evaluacion-psicologica', methods=['POST'])
-def evaluacion_psicologica():
-    data = request.get_json()
-    required = ['atleta_id', 'estado_emocional', 'motivacion', 'estres']
-    if not all(data.get(k) for k in required):
+    required = ['atleta_id', 'fecha', 'diagnostico', 'tratamiento', 'observaciones']
+    if not data or not all(data.get(k) for k in required):
         return jsonify({"error": "Todos los campos son requeridos"}), 400
 
     with get_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute('''
-                INSERT INTO evaluacion_psicologica (atleta_id, estado_emocional, motivacion, estres)
-                VALUES (%s, %s, %s, %s);
-            ''', (data['atleta_id'], data['estado_emocional'], data['motivacion'], data['estres']))
+                INSERT INTO medico (atleta_id, fecha, diagnostico, tratamiento, observaciones)
+                VALUES (%s, %s, %s, %s, %s);
+            ''', (data['atleta_id'], data['fecha'], data['diagnostico'], data['tratamiento'], data['observaciones']))
             conn.commit()
 
-    return jsonify({"mensaje": "Evaluación psicológica guardada correctamente"}), 200
+    return jsonify({"mensaje": "Datos médicos guardados correctamente"}), 200
 
 
 @app.route('/entrenamiento', methods=['POST'])
 def entrenamiento():
     data = request.get_json()
     required = ['atleta_id', 'tipo_entrenamiento', 'duracion', 'intensidad', 'observaciones']
-    if not all(data.get(k) for k in required):
+    if not data or not all(data.get(k) for k in required):
         return jsonify({"error": "Todos los campos son requeridos"}), 400
 
     with get_db() as conn:
@@ -164,14 +147,12 @@ def entrenamiento():
     return jsonify({"mensaje": "Entrenamiento guardado correctamente"}), 200
 
 
-
-
 @app.route('/evaluaciones', methods=['GET'])
 def obtener_todas_evaluaciones():
     resultado = {}
     with get_db() as conn:
         with conn.cursor() as cursor:
-            for tabla in ['evaluacion_psicologica', 'nutricion', 'medico', 'entrenamiento']:
+            for tabla in ['psicologia', 'nutricion', 'medico', 'entrenamiento']:
                 cursor.execute(f'SELECT * FROM {tabla}')
                 rows = cursor.fetchall()
                 columnas = [desc[0] for desc in cursor.description]
@@ -179,18 +160,22 @@ def obtener_todas_evaluaciones():
     return jsonify(resultado)
 
 
-
-
-
 @app.route('/add_evento', methods=['POST'])
 def agregar_evento():
     data = request.get_json()
-    evento = data.get('evento')  # Asegúrate de que el cuerpo de la solicitud tenga la información correcta
-    # Aquí agregas la lógica para almacenar el evento
-    return jsonify({"mensaje": "Evento agregado correctamente"})
+    required = ['nombre', 'fecha', 'lugar', 'descripcion']
+    if not data or not all(data.get(k) for k in required):
+        return jsonify({"error": "Todos los campos del evento son requeridos"}), 400
 
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute('''
+                INSERT INTO evento (nombre, fecha, lugar, descripcion)
+                VALUES (%s, %s, %s, %s);
+            ''', (data['nombre'], data['fecha'], data['lugar'], data['descripcion']))
+            conn.commit()
 
-
+    return jsonify({"mensaje": "Evento agregado correctamente"}), 200
 
 
 # ------------------ MAIN ------------------
