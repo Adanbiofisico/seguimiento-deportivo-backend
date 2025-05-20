@@ -140,7 +140,11 @@ def guardar_nutricion():
 @app.route('/seguimiento-medico', methods=['POST'])
 def seguimiento_medico():
     data = request.get_json()
-    print("DATA RECIBIDA:", data)  # 👈 Añade esto
+    print("DATA RECIBIDA:", data)
+
+    # Adaptar el nombre del campo 'consulta_fecha' a 'fecha'
+    if data and 'consulta_fecha' in data:
+        data['fecha'] = data['consulta_fecha']
 
     required = ['atleta_id', 'fecha', 'diagnostico', 'tratamiento', 'observaciones']
     if not data or not all(data.get(k) for k in required):
@@ -154,7 +158,13 @@ def seguimiento_medico():
             cursor.execute('''
                 INSERT INTO medico (atleta_id, fecha, diagnostico, tratamiento, observaciones)
                 VALUES (%s, %s, %s, %s, %s);
-            ''', (data['atleta_id'], data['fecha'], data['diagnostico'], data['tratamiento'], data['observaciones']))
+            ''', (
+                data['atleta_id'],
+                data['fecha'],
+                data['diagnostico'],
+                data['tratamiento'],
+                data['observaciones']
+            ))
             conn.commit()
 
     return jsonify({"mensaje": "Datos médicos guardados correctamente"}), 200
