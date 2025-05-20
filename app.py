@@ -140,8 +140,13 @@ def guardar_nutricion():
 @app.route('/seguimiento-medico', methods=['POST'])
 def seguimiento_medico():
     data = request.get_json()
+    print("DATA RECIBIDA:", data)  # 👈 Añade esto
+
     required = ['atleta_id', 'fecha', 'diagnostico', 'tratamiento', 'observaciones']
     if not data or not all(data.get(k) for k in required):
+        print("FALTAN CAMPOS:")
+        for k in required:
+            print(f"{k} -> {data.get(k)}")
         return jsonify({"error": "Todos los campos son requeridos"}), 400
 
     with get_db() as conn:
