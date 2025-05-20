@@ -96,19 +96,38 @@ def psicologia():
 @app.route('/nutricion', methods=['POST'])
 def nutricion():
     data = request.get_json()
-    required = ['atleta_id', 'fecha', 'peso', 'altura', 'imc', 'observaciones']
+    required = ['id_atleta', 'fecha']
     if not data or not all(data.get(k) for k in required):
-        return jsonify({"error": "Todos los campos son requeridos"}), 400
+        return jsonify({"error": "id_atleta y fecha son requeridos"}), 400
 
     with get_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute('''
-                INSERT INTO nutricion (atleta_id, fecha, peso, altura, imc, observaciones)
-                VALUES (%s, %s, %s, %s, %s, %s);
-            ''', (data['atleta_id'], data['fecha'], data['peso'], data['altura'], data['imc'], data['observaciones']))
+                INSERT INTO nutricion (
+                    id_atleta,
+                    fecha,
+                    tipo_de_consulta,
+                    recomendaciones,
+                    notas,
+                    macronutrientes,
+                    hidratacion,
+                    frecuencia_comidas
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+            ''', (
+                data['id_atleta'],
+                data['fecha'],
+                data.get('tipo_de_consulta'),
+                data.get('recomendaciones'),
+                data.get('notas'),
+                data.get('macronutrientes'),
+                data.get('hidratacion'),
+                data.get('frecuencia_comidas'),
+            ))
             conn.commit()
 
     return jsonify({"mensaje": "Datos de nutrición guardados correctamente"}), 200
+
 
 
 @app.route('/seguimiento-medico', methods=['POST'])
