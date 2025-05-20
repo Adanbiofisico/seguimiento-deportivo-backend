@@ -108,7 +108,7 @@ def guardar_nutricion():
         hidratacion = int(data.get('hidratacion')) if data.get('hidratacion') else None
         frecuencia_comidas = int(data.get('frecuencia_comidas')) if data.get('frecuencia_comidas') else None
 
-        conn = get_db_connection()
+        conn = conn = get_db()
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO nutricion (
