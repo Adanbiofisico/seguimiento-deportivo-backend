@@ -92,41 +92,44 @@ def psicologia():
 
     return jsonify({"mensaje": "Datos de psicología guardados correctamente"}), 200
 
-
 @app.route('/nutricion', methods=['POST'])
-def nutricion():
+def agregar_evaluacion_nutricion():
     data = request.get_json()
-    required = ['id_atleta', 'fecha']
-    if not data or not all(data.get(k) for k in required):
-        return jsonify({"error": "id_atleta y fecha son requeridos"}), 400
+    print("Datos recibidos:", data)
 
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute('''
-                INSERT INTO nutricion (
-                    id_atleta,
-                    fecha,
-                    tipo_de_consulta,
-                    recomendaciones,
-                    notas,
-                    macronutrientes,
-                    hidratacion,
-                    frecuencia_comidas
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-            ''', (
-                data['id_atleta'],
-                data['fecha'],
-                data.get('tipo_de_consulta'),
-                data.get('recomendaciones'),
-                data.get('notas'),
-                data.get('macronutrientes'),
-                data.get('hidratacion'),
-                data.get('frecuencia_comidas'),
-            ))
-            conn.commit()
+    try:
+        id_atleta = data['id_atleta']
+        fecha = data['fecha']
+        tipo_de_consulta = data.get('tipo_de_consulta', '')
+        recomendaciones = data.get('recomendaciones', '')
+        notas = data.get('notas', '')
+        macronutrientes = data.get('macronutrientes', '')
+        hidratacion = data.get('hidratacion', None)
+        frecuencia_comidas = data.get('frecuencia_comidas', None)
 
-    return jsonify({"mensaje": "Datos de nutrición guardados correctamente"}), 200
+        conn = psycopg2.connect(...)
+        cur = conn.cursor()
+
+        cur.execute('''
+            INSERT INTO nutricion (
+                id_atleta, fecha, tipo_de_consulta, recomendaciones, notas,
+                macronutrientes, hidratacion, frecuencia_comidas
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (
+            id_atleta, fecha, tipo_de_consulta, recomendaciones, notas,
+            macronutrientes, hidratacion, frecuencia_comidas
+        ))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({'mensaje': 'Evaluación nutricional agregada con éxito'}), 201
+
+    except Exception as e:
+        print("Error:", e)
+        return jsonify({'error': str(e)}), 400
 
 
 
