@@ -91,46 +91,48 @@ def psicologia():
             conn.commit()
 
     return jsonify({"mensaje": "Datos de psicología guardados correctamente"}), 200
-
 @app.route('/nutricion', methods=['POST'])
-def agregar_evaluacion_nutricion():
+def guardar_nutricion():
     data = request.get_json()
     print("Datos recibidos:", data)
-
+    
     try:
-        id_atleta = data['id_atleta']
-        fecha = data['fecha']
-        tipo_de_consulta = data.get('tipo_de_consulta', '')
-        recomendaciones = data.get('recomendaciones', '')
-        notas = data.get('notas', '')
-        macronutrientes = data.get('macronutrientes', '')
-        hidratacion = data.get('hidratacion', None)
-        frecuencia_comidas = data.get('frecuencia_comidas', None)
+        id_atleta = int(data['id_atleta'])
+        fecha = datetime.strptime(data['fecha'], '%Y-%m-%d').date()
+        tipo_de_consulta = data.get('tipo_de_consulta')
+        recomendaciones = data.get('recomendaciones')
+        notas = data.get('notas')
+        macronutrientes = data.get('macronutrientes')
+        hidratacion = int(data.get('hidratacion')) if data.get('hidratacion') else None
+        frecuencia_comidas = int(data.get('frecuencia_comidas')) if data.get('frecuencia_comidas') else None
 
-        conn = psycopg2.connect(...)
+        conn = get_db_connection()
         cur = conn.cursor()
-
-        cur.execute('''
+        cur.execute("""
             INSERT INTO nutricion (
                 id_atleta, fecha, tipo_de_consulta, recomendaciones, notas,
                 macronutrientes, hidratacion, frecuencia_comidas
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id_atleta, fecha) DO UPDATE SET
+                tipo_de_consulta = EXCLUDED.tipo_de_consulta,
+                recomendaciones = EXCLUDED.recomendaciones,
+                notas = EXCLUDED.notas,
+                macronutrientes = EXCLUDED.macronutrientes,
+                hidratacion = EXCLUDED.hidratacion,
+                frecuencia_comidas = EXCLUDED.frecuencia_comidas;
+        """, (
             id_atleta, fecha, tipo_de_consulta, recomendaciones, notas,
             macronutrientes, hidratacion, frecuencia_comidas
         ))
-
         conn.commit()
         cur.close()
         conn.close()
 
-        return jsonify({'mensaje': 'Evaluación nutricional agregada con éxito'}), 201
+        return jsonify({"message": "Datos de nutrición guardados correctamente"}), 200
 
     except Exception as e:
         print("Error:", e)
-        return jsonify({'error': str(e)}), 400
-
+        return jsonify({"error": str(e)}), 400
 
 
 @app.route('/seguimiento-medico', methods=['POST'])
