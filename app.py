@@ -135,18 +135,13 @@ def guardar_nutricion():
     except Exception as e:
         print("Error:", e)
         return jsonify({"error": str(e)}), 400
-
 @app.route('/medico', methods=['POST'])
 @app.route('/seguimiento-medico', methods=['POST'])
 def seguimiento_medico():
     data = request.get_json()
     print("DATA RECIBIDA:", data)
 
-    # Adaptar el nombre del campo 'consulta_fecha' a 'fecha'
-    if data and 'consulta_fecha' in data:
-        data['fecha'] = data['consulta_fecha']
-
-    required = ['atleta_id', 'fecha', 'diagnostico', 'tratamiento', 'observaciones']
+    required = ['atleta_id', 'fecha', 'temperatura', 'presion_arterial', 'diagnostico', 'tratamiento', 'observaciones']
     if not data or not all(data.get(k) for k in required):
         print("FALTAN CAMPOS:")
         for k in required:
@@ -156,11 +151,13 @@ def seguimiento_medico():
     with get_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute('''
-                INSERT INTO medico (atleta_id, fecha, diagnostico, tratamiento, observaciones)
-                VALUES (%s, %s, %s, %s, %s);
+                INSERT INTO medico (atleta_id, fecha, temperatura, presion_arterial, diagnostico, tratamiento, observaciones)
+                VALUES (%s, %s, %s, %s, %s, %s, %s);
             ''', (
                 data['atleta_id'],
                 data['fecha'],
+                data['temperatura'],
+                data['presion_arterial'],
                 data['diagnostico'],
                 data['tratamiento'],
                 data['observaciones']
@@ -168,6 +165,7 @@ def seguimiento_medico():
             conn.commit()
 
     return jsonify({"mensaje": "Datos médicos guardados correctamente"}), 200
+
 
 
 @app.route('/entrenamiento', methods=['POST'])
