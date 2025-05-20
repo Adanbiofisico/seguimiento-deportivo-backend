@@ -202,19 +202,21 @@ def obtener_todas_evaluaciones():
 @app.route('/add_evento', methods=['POST'])
 def agregar_evento():
     data = request.get_json()
-    required = ['nombre', 'fecha', 'lugar', 'descripcion']
+    required = ['id_atleta', 'nombre', 'fecha', 'lugar', 'descripcion']
+    
     if not data or not all(data.get(k) for k in required):
         return jsonify({"error": "Todos los campos del evento son requeridos"}), 400
 
     with get_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute('''
-                INSERT INTO evento (nombre, fecha, lugar, descripcion)
-                VALUES (%s, %s, %s, %s);
-            ''', (data['nombre'], data['fecha'], data['lugar'], data['descripcion']))
+                INSERT INTO evento (id_atleta, nombre, fecha, lugar, descripcion)
+                VALUES (%s, %s, %s, %s, %s);
+            ''', (data['id_atleta'], data['nombre'], data['fecha'], data['lugar'], data['descripcion']))
             conn.commit()
 
     return jsonify({"mensaje": "Evento agregado correctamente"}), 200
+
 
 
 
