@@ -136,7 +136,7 @@ def guardar_nutricion():
         print("Error:", e)
         return jsonify({"error": str(e)}), 400
 
-
+@app.route('/medico', methods=['POST'])
 @app.route('/seguimiento-medico', methods=['POST'])
 def seguimiento_medico():
     data = request.get_json()
