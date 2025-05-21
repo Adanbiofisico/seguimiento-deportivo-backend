@@ -108,26 +108,34 @@ def home():
 @app.route('/psicologia', methods=['POST'])
 def psicologia():
     data = request.get_json() or {}
+
+    # Validar los obligatorios
     for k in ('id_atleta','estado_emocional','motivacion','estres'):
         if k not in data:
             return jsonify({"error": f"{k} es obligatorio"}), 400
+
+    # Valor opcional
+    observaciones = data.get('observaciones', '')
+
     try:
         with get_db() as conn:
             with conn.cursor() as c:
                 c.execute("""
-                    INSERT INTO psicologia (id_atleta, estado_emocional, motivacion, estres)
-                    VALUES (%s,%s,%s,%s);
+                    INSERT INTO psicologia (id_atleta, estado_emocional, motivacion, estres, observaciones)
+                    VALUES (%s, %s, %s, %s, %s);
                 """, (
                     int(data['id_atleta']),
                     data['estado_emocional'],
                     data['motivacion'],
-                    int(data['estres'])
+                    int(data['estres']),
+                    observaciones
                 ))
             conn.commit()
         return jsonify({"mensaje":"Psicología registrada"}), 200
     except Exception as e:
         logging.exception("Error en /psicologia")
         return jsonify({"error":"Error interno"}), 500
+
 
 # Nutrición
 @app.route('/nutricion', methods=['POST'])
