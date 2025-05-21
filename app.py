@@ -17,6 +17,7 @@ def get_db():
         raise Exception("La URL de la base de datos no está configurada.")
     return psycopg2.connect(DATABASE_URL)
 
+
 # Crear tablas si no existen
 def init_db():
     with get_db() as conn:
@@ -70,7 +71,23 @@ def init_db():
                     descripcion TEXT
                 );
             ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS autoseguimiento (
+                    id SERIAL PRIMARY KEY,
+                    id_atleta TEXT NOT NULL,
+                    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    calidad_sueno INTEGER,
+                    horas_sueno REAL,
+                    fatiga INTEGER,
+                    dolor_muscular INTEGER,
+                    estres INTEGER,
+                    estado_animo INTEGER,
+                    comentarios TEXT
+                );
+            ''')
             conn.commit()
+
+
 
 # Inicializar base de datos
 init_db()
@@ -202,7 +219,7 @@ def obtener_todas_evaluaciones():
 @app.route('/add_evento', methods=['POST'])
 def agregar_evento():
     data = request.get_json()
-    required = ['id_atleta', 'nombre', 'fecha', 'lugar', 'descripcion']
+    required = ['id_atleta','nombre', 'fecha', 'lugar', 'descripcion']
     
     if not data or not all(data.get(k) for k in required):
         return jsonify({"error": "Todos los campos del evento son requeridos"}), 400
@@ -219,6 +236,34 @@ def agregar_evento():
 
 
 
+@app.route('/add_autoseguimiento', methods=['POST'])
+def add_autoseguimiento():
+    data = request.get_json()
+    required = ['id_atleta']
+    if not data or not all(k in data for k in required):
+        return jsonify({"error": "id_atleta es obligatorio"}), 400
+    
+    id_atleta = data['id_atleta']
+    calidad_sueno = int(data.get('calidad_sueno', 0)) if data.get('calidad_sueno') else None
+    horas_sueno = float(data.get('horas_sueno')) if data.get('horas_sueno') else None
+    fatiga = int(data.get('fatiga', 0)) if data.get('fatiga') else None
+    dolor_muscular = int(data.get('dolor_muscular', 0)) if data.get('dolor_muscular') else None
+    estres = int(data.get('estres', 0)) if data.get('estres') else None
+    estado_animo = int(data.get('estado_animo', 0)) if data.get('estado_animo') else None
+    comentarios = data.get('comentarios')
+
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    INSERT INTO autoseguimiento
+                    (id_atleta, calidad_sueno, horas_sueno, fatiga, dolor_muscular, estres, estado_animo, comentarios)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                ''', (id_atleta, calidad_sueno, horas_sueno, fatiga, dolor_muscular, estres, estado_animo, comentarios))
+                conn.commit()
+        return jsonify({"mensaje": "Seguimiento registrado correctamente"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/', methods=['GET'])
 def home():
