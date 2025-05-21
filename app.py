@@ -235,22 +235,25 @@ def agregar_evento():
     return jsonify({"mensaje": "Evento agregado correctamente"}), 200
 
 
-
 @app.route('/add_autoseguimiento', methods=['POST'])
-def add_autoseguimiento():
+def agregar_autoseguimiento():
     data = request.get_json()
-    required = ['id_atleta']
-    if not data or not all(k in data for k in required):
-        return jsonify({"error": "id_atleta es obligatorio"}), 400
     
-    id_atleta = data['id_atleta']
-    calidad_sueno = int(data.get('calidad_sueno', 0)) if data.get('calidad_sueno') else None
-    horas_sueno = float(data.get('horas_sueno')) if data.get('horas_sueno') else None
-    fatiga = int(data.get('fatiga', 0)) if data.get('fatiga') else None
-    dolor_muscular = int(data.get('dolor_muscular', 0)) if data.get('dolor_muscular') else None
-    estres = int(data.get('estres', 0)) if data.get('estres') else None
-    estado_animo = int(data.get('estado_animo', 0)) if data.get('estado_animo') else None
-    comentarios = data.get('comentarios')
+    required = ['id_atleta']
+    if not data or not all(data.get(k) for k in required):
+        return jsonify({"error": "id_atleta es obligatorio"}), 400
+
+    try:
+        id_atleta = int(data['id_atleta'])
+        calidad_sueno = int(data.get('calidad_sueno')) if data.get('calidad_sueno') not in [None, ""] else None
+        horas_sueno = float(data.get('horas_sueno')) if data.get('horas_sueno') not in [None, ""] else None
+        fatiga = int(data.get('fatiga')) if data.get('fatiga') not in [None, ""] else None
+        dolor_muscular = int(data.get('dolor_muscular')) if data.get('dolor_muscular') not in [None, ""] else None
+        estres = int(data.get('estres')) if data.get('estres') not in [None, ""] else None
+        estado_animo = int(data.get('estado_animo')) if data.get('estado_animo') not in [None, ""] else None
+        comentarios = data.get('comentarios')
+    except ValueError:
+        return jsonify({"error": "Datos numéricos inválidos"}), 400
 
     try:
         with get_db() as conn:
@@ -263,7 +266,8 @@ def add_autoseguimiento():
                 conn.commit()
         return jsonify({"mensaje": "Seguimiento registrado correctamente"}), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Error al registrar seguimiento: {str(e)}"}), 500
+
 
 @app.route('/', methods=['GET'])
 def home():
