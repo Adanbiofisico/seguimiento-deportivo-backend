@@ -3,78 +3,86 @@ from flask_cors import CORS
 import psycopg2
 import os
 from datetime import datetime
+import logging
 
-
+# ——— Configuración básica ———
+logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 CORS(app)
-
-# URL de conexión a PostgreSQL
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-# Función para conectar con la base de datos
 def get_db():
     if not DATABASE_URL:
-        raise Exception("La URL de la base de datos no está configurada.")
+        raise RuntimeError("DATABASE_URL no configurada")
     return psycopg2.connect(DATABASE_URL)
 
-
-# Crear tablas si no existen
+# ——— Creación / migración de tablas ———
 def init_db():
     with get_db() as conn:
         with conn.cursor() as cursor:
-            cursor.execute('''
+            # Psicología
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS psicologia (
                     id SERIAL PRIMARY KEY,
-                    atleta_id TEXT,
+                    id_atleta INTEGER NOT NULL,
                     estado_emocional TEXT,
                     motivacion TEXT,
-                    estres TEXT
+                    estres INTEGER
                 );
-            ''')
-            cursor.execute('''
+            """)
+            # Nutrición
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS nutricion (
                     id SERIAL PRIMARY KEY,
-                    atleta_id TEXT,
-                    fecha TEXT,
+                    id_atleta INTEGER NOT NULL,
+                    fecha DATE NOT NULL,
                     peso REAL,
                     altura REAL,
                     imc REAL,
-                    observaciones TEXT
+                    observaciones TEXT,
+                    UNIQUE (id_atleta, fecha)
                 );
-            ''')
-            cursor.execute('''
+            """)
+            # Médico
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS medico (
                     id SERIAL PRIMARY KEY,
-                    atleta_id TEXT,
-                    fecha TEXT,
+                    id_atleta INTEGER NOT NULL,
+                    fecha DATE NOT NULL,
+                    temperatura REAL,
+                    presion_arterial TEXT,
                     diagnostico TEXT,
                     tratamiento TEXT,
                     observaciones TEXT
                 );
-            ''')
-            cursor.execute('''
+            """)
+            # Entrenamiento
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS entrenamiento (
                     id SERIAL PRIMARY KEY,
-                    atleta_id TEXT,
+                    id_atleta INTEGER NOT NULL,
                     tipo_entrenamiento TEXT,
                     duracion INTEGER,
                     intensidad TEXT,
                     observaciones TEXT
                 );
-            ''')
-            cursor.execute('''
+            """)
+            # Evento
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS evento (
                     id SERIAL PRIMARY KEY,
+                    id_atleta INTEGER,
                     nombre TEXT,
-                    fecha TEXT,
+                    fecha DATE,
                     lugar TEXT,
                     descripcion TEXT
                 );
-            ''')
-            cursor.execute('''
+            """)
+            # Autoseguimiento
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS autoseguimiento (
                     id SERIAL PRIMARY KEY,
-                    id_atleta TEXT NOT NULL,
+                    id_atleta INTEGER NOT NULL,
                     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     calidad_sueno INTEGER,
                     horas_sueno REAL,
@@ -84,197 +92,209 @@ def init_db():
                     estado_animo INTEGER,
                     comentarios TEXT
                 );
-            ''')
-            conn.commit()
+            """)
+        conn.commit()
 
-
-
-# Inicializar base de datos
 init_db()
 
-# ------------------ RUTAS ------------------
+# ——— RUTAS ———
 
-@app.route('/psicologia', methods=['POST'])
-def psicologia():
-    data = request.get_json()
-    required = ['atleta_id', 'estado_emocional', 'motivacion', 'estres']
-    if not data or not all(data.get(k) for k in required):
-        return jsonify({"error": "Todos los campos son requeridos"}), 400
-
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute('''
-                INSERT INTO psicologia (atleta_id, estado_emocional, motivacion, estres)
-                VALUES (%s, %s, %s, %s);
-            ''', (data['atleta_id'], data['estado_emocional'], data['motivacion'], data['estres']))
-            conn.commit()
-
-    return jsonify({"mensaje": "Datos de psicología guardados correctamente"}), 200
-@app.route('/nutricion', methods=['POST'])
-def guardar_nutricion():
-    data = request.get_json()
-    print("Datos recibidos:", data)
-    
-    try:
-        id_atleta = int(data['id_atleta'])
-        fecha = datetime.strptime(data['fecha'], '%Y-%m-%d').date()
-        tipo_de_consulta = data.get('tipo_de_consulta')
-        recomendaciones = data.get('recomendaciones')
-        notas = data.get('notas')
-        macronutrientes = data.get('macronutrientes')
-        hidratacion = int(data.get('hidratacion')) if data.get('hidratacion') else None
-        frecuencia_comidas = int(data.get('frecuencia_comidas')) if data.get('frecuencia_comidas') else None
-
-        conn = conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO nutricion (
-                id_atleta, fecha, tipo_de_consulta, recomendaciones, notas,
-                macronutrientes, hidratacion, frecuencia_comidas
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id_atleta, fecha) DO UPDATE SET
-                tipo_de_consulta = EXCLUDED.tipo_de_consulta,
-                recomendaciones = EXCLUDED.recomendaciones,
-                notas = EXCLUDED.notas,
-                macronutrientes = EXCLUDED.macronutrientes,
-                hidratacion = EXCLUDED.hidratacion,
-                frecuencia_comidas = EXCLUDED.frecuencia_comidas;
-        """, (
-            id_atleta, fecha, tipo_de_consulta, recomendaciones, notas,
-            macronutrientes, hidratacion, frecuencia_comidas
-        ))
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        return jsonify({"message": "Datos de nutrición guardados correctamente"}), 200
-
-    except Exception as e:
-        print("Error:", e)
-        return jsonify({"error": str(e)}), 400
-@app.route('/medico', methods=['POST'])
-@app.route('/seguimiento-medico', methods=['POST'])
-def seguimiento_medico():
-    data = request.get_json()
-    print("DATA RECIBIDA:", data)
-
-    required = ['atleta_id', 'fecha', 'temperatura', 'presion_arterial', 'diagnostico', 'tratamiento', 'observaciones']
-    if not data or not all(data.get(k) for k in required):
-        print("FALTAN CAMPOS:")
-        for k in required:
-            print(f"{k} -> {data.get(k)}")
-        return jsonify({"error": "Todos los campos son requeridos"}), 400
-
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute('''
-                INSERT INTO medico (atleta_id, fecha, temperatura, presion_arterial, diagnostico, tratamiento, observaciones)
-                VALUES (%s, %s, %s, %s, %s, %s, %s);
-            ''', (
-                data['atleta_id'],
-                data['fecha'],
-                data['temperatura'],
-                data['presion_arterial'],
-                data['diagnostico'],
-                data['tratamiento'],
-                data['observaciones']
-            ))
-            conn.commit()
-
-    return jsonify({"mensaje": "Datos médicos guardados correctamente"}), 200
-
-
-
-@app.route('/entrenamiento', methods=['POST'])
-def entrenamiento():
-    data = request.get_json()
-    required = ['atleta_id', 'tipo_entrenamiento', 'duracion', 'intensidad', 'observaciones']
-    if not data or not all(data.get(k) for k in required):
-        return jsonify({"error": "Todos los campos son requeridos"}), 400
-
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute('''
-                INSERT INTO entrenamiento (atleta_id, tipo_entrenamiento, duracion, intensidad, observaciones)
-                VALUES (%s, %s, %s, %s, %s);
-            ''', (data['atleta_id'], data['tipo_entrenamiento'], data['duracion'], data['intensidad'], data['observaciones']))
-            conn.commit()
-
-    return jsonify({"mensaje": "Entrenamiento guardado correctamente"}), 200
-
-
-@app.route('/evaluaciones', methods=['GET'])
-def obtener_todas_evaluaciones():
-    resultado = {}
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            for tabla in ['psicologia', 'nutricion', 'medico', 'entrenamiento']:
-                cursor.execute(f'SELECT * FROM {tabla}')
-                rows = cursor.fetchall()
-                columnas = [desc[0] for desc in cursor.description]
-                resultado[tabla] = [dict(zip(columnas, row)) for row in rows]
-    return jsonify(resultado)
-
-
-@app.route('/add_evento', methods=['POST'])
-def agregar_evento():
-    data = request.get_json()
-    required = ['id_atleta','nombre', 'fecha', 'lugar', 'descripcion']
-    
-    if not data or not all(data.get(k) for k in required):
-        return jsonify({"error": "Todos los campos del evento son requeridos"}), 400
-
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute('''
-                INSERT INTO evento (id_atleta, nombre, fecha, lugar, descripcion)
-                VALUES (%s, %s, %s, %s, %s);
-            ''', (data['id_atleta'], data['nombre'], data['fecha'], data['lugar'], data['descripcion']))
-            conn.commit()
-
-    return jsonify({"mensaje": "Evento agregado correctamente"}), 200
-
-
-@app.route('/add_autoseguimiento', methods=['POST'])
-def agregar_autoseguimiento():
-    data = request.get_json()
-    
-    required = ['id_atleta']
-    if not data or not all(data.get(k) for k in required):
-        return jsonify({"error": "id_atleta es obligatorio"}), 400
-
-    try:
-        id_atleta = int(data['id_atleta'])
-        calidad_sueno = int(data.get('calidad_sueno')) if data.get('calidad_sueno') not in [None, ""] else None
-        horas_sueno = float(data.get('horas_sueno')) if data.get('horas_sueno') not in [None, ""] else None
-        fatiga = int(data.get('fatiga')) if data.get('fatiga') not in [None, ""] else None
-        dolor_muscular = int(data.get('dolor_muscular')) if data.get('dolor_muscular') not in [None, ""] else None
-        estres = int(data.get('estres')) if data.get('estres') not in [None, ""] else None
-        estado_animo = int(data.get('estado_animo')) if data.get('estado_animo') not in [None, ""] else None
-        comentarios = data.get('comentarios')
-    except ValueError:
-        return jsonify({"error": "Datos numéricos inválidos"}), 400
-
-    try:
-        with get_db() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute('''
-                    INSERT INTO autoseguimiento
-                    (id_atleta, calidad_sueno, horas_sueno, fatiga, dolor_muscular, estres, estado_animo, comentarios)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                ''', (id_atleta, calidad_sueno, horas_sueno, fatiga, dolor_muscular, estres, estado_animo, comentarios))
-                conn.commit()
-        return jsonify({"mensaje": "Seguimiento registrado correctamente"}), 200
-    except Exception as e:
-        return jsonify({"error": f"Error al registrar seguimiento: {str(e)}"}), 500
-
-
+# Ruta raíz
 @app.route('/', methods=['GET'])
 def home():
     return jsonify({"estado": "API corriendo"}), 200
 
+# Psicología
+@app.route('/psicologia', methods=['POST'])
+def psicologia():
+    data = request.get_json() or {}
+    for k in ('id_atleta','estado_emocional','motivacion','estres'):
+        if k not in data:
+            return jsonify({"error": f"{k} es obligatorio"}), 400
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    INSERT INTO psicologia (id_atleta, estado_emocional, motivacion, estres)
+                    VALUES (%s,%s,%s,%s);
+                """, (
+                    int(data['id_atleta']),
+                    data['estado_emocional'],
+                    data['motivacion'],
+                    int(data['estres'])
+                ))
+            conn.commit()
+        return jsonify({"mensaje":"Psicología registrada"}), 200
+    except Exception as e:
+        logging.exception("Error en /psicologia")
+        return jsonify({"error":"Error interno"}), 500
 
-# ------------------ MAIN ------------------
+# Nutrición
+@app.route('/nutricion', methods=['POST'])
+def nutricion():
+    data = request.get_json() or {}
+    for k in ('id_atleta','fecha','peso','altura','imc','observaciones'):
+        if k not in data:
+            return jsonify({"error": f"{k} es obligatorio"}), 400
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    INSERT INTO nutricion (id_atleta, fecha, peso, altura, imc, observaciones)
+                    VALUES (%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (id_atleta, fecha) DO UPDATE SET
+                      peso = EXCLUDED.peso,
+                      altura = EXCLUDED.altura,
+                      imc = EXCLUDED.imc,
+                      observaciones = EXCLUDED.observaciones;
+                """, (
+                    int(data['id_atleta']),
+                    datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
+                    float(data['peso']),
+                    float(data['altura']),
+                    float(data['imc']),
+                    data['observaciones']
+                ))
+            conn.commit()
+        return jsonify({"mensaje":"Nutrición registrada"}), 200
+    except Exception as e:
+        logging.exception("Error en /nutricion")
+        return jsonify({"error":"Error interno"}), 500
 
+# Médico
+@app.route('/medico', methods=['POST'])
+def medico():
+    data = request.get_json() or {}
+    for k in ('id_atleta','fecha','temperatura','presion_arterial','diagnostico','tratamiento','observaciones'):
+        if k not in data:
+            return jsonify({"error": f"{k} es obligatorio"}), 400
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    INSERT INTO medico (id_atleta, fecha, temperatura, presion_arterial, diagnostico, tratamiento, observaciones)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s);
+                """, (
+                    int(data['id_atleta']),
+                    datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
+                    float(data['temperatura']),
+                    data['presion_arterial'],
+                    data['diagnostico'],
+                    data['tratamiento'],
+                    data['observaciones']
+                ))
+            conn.commit()
+        return jsonify({"mensaje":"Médico registrado"}), 200
+    except Exception as e:
+        logging.exception("Error en /medico")
+        return jsonify({"error":"Error interno"}), 500
+
+# Entrenamiento
+@app.route('/entrenamiento', methods=['POST'])
+def entrenamiento():
+    data = request.get_json() or {}
+    for k in ('id_atleta','tipo_entrenamiento','duracion','intensidad','observaciones'):
+        if k not in data:
+            return jsonify({"error": f"{k} es obligatorio"}), 400
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    INSERT INTO entrenamiento (id_atleta, tipo_entrenamiento, duracion, intensidad, observaciones)
+                    VALUES (%s,%s,%s,%s,%s);
+                """, (
+                    int(data['id_atleta']),
+                    data['tipo_entrenamiento'],
+                    int(data['duracion']),
+                    data['intensidad'],
+                    data['observaciones']
+                ))
+            conn.commit()
+        return jsonify({"mensaje":"Entrenamiento registrado"}), 200
+    except Exception as e:
+        logging.exception("Error en /entrenamiento")
+        return jsonify({"error":"Error interno"}), 500
+
+# Eventos
+@app.route('/add_evento', methods=['POST'])
+def agregar_evento():
+    data = request.get_json() or {}
+    for k in ('id_atleta','nombre','fecha','lugar','descripcion'):
+        if k not in data:
+            return jsonify({"error": f"{k} es obligatorio"}), 400
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    INSERT INTO evento (id_atleta, nombre, fecha, lugar, descripcion)
+                    VALUES (%s,%s,%s,%s,%s);
+                """, (
+                    int(data['id_atleta']),
+                    data['nombre'],
+                    datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
+                    data['lugar'],
+                    data['descripcion']
+                ))
+            conn.commit()
+        return jsonify({"mensaje":"Evento registrado"}), 200
+    except Exception as e:
+        logging.exception("Error en /add_evento")
+        return jsonify({"error":"Error interno"}), 500
+
+# Autoseguimiento (fatiga)
+@app.route('/add_autoseguimiento', methods=['POST'])
+def agregar_autoseguimiento():
+    data = request.get_json() or {}
+    if 'id_atleta' not in data:
+        return jsonify({"error":"id_atleta es obligatorio"}), 400
+
+    try:
+        # parseo seguro
+        id_atleta     = int(data['id_atleta'])
+        calidad       = int(data.get('calidad_sueno'))    if data.get('calidad_sueno') else None
+        horas         = float(data.get('horas_sueno'))    if data.get('horas_sueno') else None
+        fat           = int(data.get('fatiga'))           if data.get('fatiga') else None
+        dolor         = int(data.get('dolor_muscular'))   if data.get('dolor_muscular') else None
+        est           = int(data.get('estres'))           if data.get('estres') else None
+        animo         = int(data.get('estado_animo'))     if data.get('estado_animo') else None
+        comentarios   = data.get('comentarios')
+    except ValueError:
+        return jsonify({"error":"Formato numérico inválido"}), 400
+
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    INSERT INTO autoseguimiento
+                      (id_atleta, calidad_sueno, horas_sueno, fatiga, dolor_muscular, estres, estado_animo, comentarios)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s);
+                """, (
+                    id_atleta, calidad, horas,
+                    fat, dolor, est, animo, comentarios
+                ))
+            conn.commit()
+        return jsonify({"mensaje":"Autoseguimiento registrado"}), 200
+    except Exception as e:
+        logging.exception("Error en /add_autoseguimiento")
+        return jsonify({"error":"Error interno"}), 500
+
+# Obtener todas las evaluaciones
+@app.route('/evaluaciones', methods=['GET'])
+def obtener_todas_evaluaciones():
+    tablas = ['psicologia','nutricion','medico','entrenamiento','evento','autoseguimiento']
+    resultado = {}
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                for t in tablas:
+                    c.execute(f"SELECT * FROM {t}")
+                    cols = [d[0] for d in c.description]
+                    resultado[t] = [dict(zip(cols, row)) for row in c.fetchall()]
+        return jsonify(resultado), 200
+    except Exception as e:
+        logging.exception("Error en /evaluaciones")
+        return jsonify({"error":"Error interno"}), 500
+
+# ——— Arranque ———
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT',5000)), debug=True)
