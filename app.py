@@ -82,7 +82,7 @@ def init_db():
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS autoseguimiento (
                     id SERIAL PRIMARY KEY,
-                    id_atleta INTEGER NOT NULL,
+                    atleta_id INTEGER NOT NULL,
                     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     calidad_sueno INTEGER,
                     horas_sueno REAL,
@@ -124,7 +124,7 @@ def psicologia():
                     INSERT INTO psicologia (atleta_id, estado_emocional, motivacion, estres, observaciones)
                     VALUES (%s, %s, %s, %s, %s);
                 """, (
-                    int(data['id_atleta']),
+                    int(data['atleta_id']),
                     data['estado_emocional'],
                     data['motivacion'],
                     int(data['estres']),
