@@ -201,27 +201,30 @@ def medico():
 @app.route('/entrenamiento', methods=['POST'])
 def entrenamiento():
     data = request.get_json() or {}
-    for k in ('id_atleta','tipo_entrenamiento','duracion','intensidad','observaciones'):
+
+    for k in ('atleta_id', 'tipo_entrenamiento', 'duracion', 'intensidad', 'observaciones'):
         if k not in data:
             return jsonify({"error": f"{k} es obligatorio"}), 400
+
     try:
         with get_db() as conn:
             with conn.cursor() as c:
                 c.execute("""
-                    INSERT INTO entrenamiento (id_atleta, tipo_entrenamiento, duracion, intensidad, observaciones)
+                    INSERT INTO entrenamiento (atleta_id, tipo_entrenamiento, duracion, intensidad, observaciones)
                     VALUES (%s,%s,%s,%s,%s);
                 """, (
-                    int(data['id_atleta']),
+                    data['atleta_id'],
                     data['tipo_entrenamiento'],
                     int(data['duracion']),
                     data['intensidad'],
                     data['observaciones']
                 ))
             conn.commit()
-        return jsonify({"mensaje":"Entrenamiento registrado"}), 200
+        return jsonify({"mensaje": "Entrenamiento registrado"}), 200
     except Exception as e:
         logging.exception("Error en /entrenamiento")
-        return jsonify({"error":"Error interno"}), 500
+        return jsonify({"error": "Error interno"}), 500
+
 
 # Eventos
 @app.route('/add_evento', methods=['POST'])
