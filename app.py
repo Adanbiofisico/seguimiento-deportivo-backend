@@ -121,7 +121,7 @@ def psicologia():
         with get_db() as conn:
             with conn.cursor() as c:
                 c.execute("""
-                    INSERT INTO psicologia (id_atleta, estado_emocional, motivacion, estres, observaciones)
+                    INSERT INTO psicologia (atleta_id, estado_emocional, motivacion, estres, observaciones)
                     VALUES (%s, %s, %s, %s, %s);
                 """, (
                     int(data['id_atleta']),
