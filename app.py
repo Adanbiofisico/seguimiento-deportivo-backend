@@ -24,7 +24,7 @@ def init_db():
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS psicologia (
                     id SERIAL PRIMARY KEY,
-                    id_atleta INTEGER NOT NULL,
+                    atleta_id INTEGER NOT NULL,
                     estado_emocional TEXT,
                     motivacion TEXT,
                     estres INTEGER
@@ -47,7 +47,7 @@ def init_db():
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS medico (
                     id SERIAL PRIMARY KEY,
-                    id_atleta INTEGER NOT NULL,
+                    atleta_id INTEGER NOT NULL,
                     fecha DATE NOT NULL,
                     temperatura REAL,
                     presion_arterial TEXT,
@@ -180,10 +180,10 @@ def medico():
         with get_db() as conn:
             with conn.cursor() as c:
                 c.execute("""
-                    INSERT INTO medico (id_atleta, fecha, temperatura, presion_arterial, diagnostico, tratamiento, observaciones)
+                    INSERT INTO medico (atleta_id, fecha, temperatura, presion_arterial, diagnostico, tratamiento, observaciones)
                     VALUES (%s,%s,%s,%s,%s,%s,%s);
                 """, (
-                    int(data['id_atleta']),
+                    int(data['atleta_id']),
                     datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
                     float(data['temperatura']),
                     data['presion_arterial'],
