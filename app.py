@@ -183,7 +183,7 @@ def medico():
                     INSERT INTO medico (atleta_id, fecha, temperatura, presion_arterial, diagnostico, tratamiento, observaciones)
                     VALUES (%s,%s,%s,%s,%s,%s,%s);
                 """, (
-                    int(data['atleta_id']),
+                    int(data['id_atleta']),
                     datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
                     float(data['temperatura']),
                     data['presion_arterial'],
