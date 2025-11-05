@@ -315,6 +315,11 @@ def privacidad():
 def terminos():
     return app.send_static_file('legal/terminos.html')
 
+@app.route('/consentimiento_tutor')
+def consentimiento_tutor():
+    return app.send_static_file('legal/consentimiento_tutor.html')
+
+
 
 # ——— Arranque ———
 if __name__ == '__main__':
