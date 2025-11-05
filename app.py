@@ -27,7 +27,8 @@ def init_db():
                     atleta_id INTEGER NOT NULL,
                     estado_emocional TEXT,
                     motivacion TEXT,
-                    estres INTEGER
+                    estres INTEGER,
+                    observaciones TEXT
                 );
             """)
             # Nutrición
@@ -93,28 +94,36 @@ def init_db():
                     comentarios TEXT
                 );
             """)
+            # Consentimientos de tutores
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS Consentimientos_Tutores (
+                    id SERIAL PRIMARY KEY,
+                    nombre_menor TEXT NOT NULL,
+                    edad_menor INTEGER NOT NULL,
+                    nombre_tutor TEXT NOT NULL,
+                    relacion_tutor TEXT,
+                    contacto_tutor TEXT NOT NULL,
+                    aceptado BOOLEAN DEFAULT TRUE,
+                    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
         conn.commit()
 
 init_db()
 
 # ——— RUTAS ———
 
-# Ruta raíz
 @app.route('/', methods=['GET'])
 def home():
     return jsonify({"estado": "API corriendo"}), 200
 
-# Psicología
+# ——— Psicología ———
 @app.route('/psicologia', methods=['POST'])
 def psicologia():
     data = request.get_json() or {}
-
-    # Validar los obligatorios
-    for k in ('id_atleta','estado_emocional','motivacion','estres'):
+    for k in ('atleta_id','estado_emocional','motivacion','estres'):
         if k not in data:
             return jsonify({"error": f"{k} es obligatorio"}), 400
-
-    # Valor opcional
     observaciones = data.get('observaciones', '')
 
     try:
@@ -136,8 +145,7 @@ def psicologia():
         logging.exception("Error en /psicologia")
         return jsonify({"error":"Error interno"}), 500
 
-
-# Nutrición
+# ——— Nutrición ———
 @app.route('/nutricion', methods=['POST'])
 def nutricion():
     data = request.get_json() or {}
@@ -169,7 +177,7 @@ def nutricion():
         logging.exception("Error en /nutricion")
         return jsonify({"error":"Error interno"}), 500
 
-# Médico
+# ——— Médico ———
 @app.route('/medico', methods=['POST'])
 def medico():
     data = request.get_json() or {}
@@ -197,15 +205,13 @@ def medico():
         logging.exception("Error en /medico")
         return jsonify({"error":"Error interno"}), 500
 
-# Entrenamiento
+# ——— Entrenamiento ———
 @app.route('/entrenamiento', methods=['POST'])
 def entrenamiento():
     data = request.get_json() or {}
-
     for k in ('atleta_id', 'tipo_entrenamiento', 'duracion', 'intensidad', 'observaciones'):
         if k not in data:
             return jsonify({"error": f"{k} es obligatorio"}), 400
-
     try:
         with get_db() as conn:
             with conn.cursor() as c:
@@ -225,8 +231,7 @@ def entrenamiento():
         logging.exception("Error en /entrenamiento")
         return jsonify({"error": "Error interno"}), 500
 
-
-# Eventos
+# ——— Eventos ———
 @app.route('/add_evento', methods=['POST'])
 def agregar_evento():
     data = request.get_json() or {}
@@ -252,7 +257,7 @@ def agregar_evento():
         logging.exception("Error en /add_evento")
         return jsonify({"error":"Error interno"}), 500
 
-# Autoseguimiento (fatiga)
+# ——— Autoseguimiento ———
 @app.route('/add_autoseguimiento', methods=['POST'])
 def agregar_autoseguimiento():
     data = request.get_json() or {}
@@ -260,7 +265,6 @@ def agregar_autoseguimiento():
         return jsonify({"error":"id_atleta es obligatorio"}), 400
 
     try:
-        # parseo seguro
         id_atleta     = int(data['id_atleta'])
         calidad       = int(data.get('calidad_sueno'))    if data.get('calidad_sueno') else None
         horas         = float(data.get('horas_sueno'))    if data.get('horas_sueno') else None
@@ -289,42 +293,13 @@ def agregar_autoseguimiento():
         logging.exception("Error en /add_autoseguimiento")
         return jsonify({"error":"Error interno"}), 500
 
-# Obtener todas las evaluaciones
-@app.route('/evaluaciones', methods=['GET'])
-def obtener_todas_evaluaciones():
-    tablas = ['psicologia','nutricion','medico','entrenamiento','evento','autoseguimiento']
-    resultado = {}
-    try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                for t in tablas:
-                    c.execute(f"SELECT * FROM {t}")
-                    cols = [d[0] for d in c.description]
-                    resultado[t] = [dict(zip(cols, row)) for row in c.fetchall()]
-        return jsonify(resultado), 200
-    except Exception as e:
-        logging.exception("Error en /evaluaciones")
-        return jsonify({"error":"Error interno"}), 500
-
-
-@app.route('/privacidad')
-def privacidad():
-    return app.send_static_file('legal/privacidad.html')
-
-@app.route('/terminos')
-def terminos():
-    return app.send_static_file('legal/terminos.html')
-
-@app.route('/consentimiento_tutor')
+# ——— Consentimiento de tutores (GET y POST en una sola ruta) ———
+@app.route('/consentimiento_tutor', methods=['GET', 'POST'])
 def consentimiento_tutor():
-    return app.send_static_file('legal/consentimiento_tutor.html')
+    if request.method == 'GET':
+        return app.send_static_file('legal/consentimiento_tutor.html')
 
-# Consentimiento de tutores
-@app.route('/consentimiento_tutor', methods=['POST'])
-def consentimiento_tutor():
     data = request.get_json() or {}
-
-    # Validar campos obligatorios
     for campo in ('nombre_menor', 'edad_menor', 'nombre_tutor', 'contacto_tutor'):
         if campo not in data:
             return jsonify({"error": f"{campo} es obligatorio"}), 400
@@ -349,7 +324,6 @@ def consentimiento_tutor():
     except Exception as e:
         logging.exception("Error en /consentimiento_tutor")
         return jsonify({"error": "Error interno"}), 500
-
 
 # ——— Arranque ———
 if __name__ == '__main__':
