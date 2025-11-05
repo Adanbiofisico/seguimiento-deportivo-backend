@@ -306,6 +306,16 @@ def obtener_todas_evaluaciones():
         logging.exception("Error en /evaluaciones")
         return jsonify({"error":"Error interno"}), 500
 
+
+@app.route('/privacidad')
+def privacidad():
+    return app.send_static_file('legal/privacidad.html')
+
+@app.route('/terminos')
+def terminos():
+    return app.send_static_file('legal/terminos.html')
+
+
 # ——— Arranque ———
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
