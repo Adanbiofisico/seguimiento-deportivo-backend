@@ -319,6 +319,36 @@ def terminos():
 def consentimiento_tutor():
     return app.send_static_file('legal/consentimiento_tutor.html')
 
+# Consentimiento de tutores
+@app.route('/consentimiento_tutor', methods=['POST'])
+def consentimiento_tutor():
+    data = request.get_json() or {}
+
+    # Validar campos obligatorios
+    for campo in ('nombre_menor', 'edad_menor', 'nombre_tutor', 'contacto_tutor'):
+        if campo not in data:
+            return jsonify({"error": f"{campo} es obligatorio"}), 400
+
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    INSERT INTO Consentimientos_Tutores
+                    (nombre_menor, edad_menor, nombre_tutor, relacion_tutor, contacto_tutor, aceptado)
+                    VALUES (%s, %s, %s, %s, %s, %s);
+                """, (
+                    data['nombre_menor'],
+                    int(data['edad_menor']),
+                    data['nombre_tutor'],
+                    data.get('relacion_tutor', None),
+                    data['contacto_tutor'],
+                    True
+                ))
+            conn.commit()
+        return jsonify({"mensaje": "Consentimiento de tutor registrado correctamente"}), 200
+    except Exception as e:
+        logging.exception("Error en /consentimiento_tutor")
+        return jsonify({"error": "Error interno"}), 500
 
 
 # ——— Arranque ———
