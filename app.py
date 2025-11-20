@@ -117,6 +117,30 @@ init_db()
 def home():
     return jsonify({"estado": "API corriendo"}), 200
 
+@app.route("/get_atleta", methods=["POST"])
+def get_atleta():
+    data = request.get_json()
+    nombre = data.get("nombre")
+
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT id_atleta FROM atletas WHERE nombre = %s", (nombre,))
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if result:
+            return jsonify({"id_atleta": result[0]})
+        else:
+            return jsonify({"error": "Atleta no encontrado"}), 404
+
+    except Exception as e:
+        print("Error:", e)
+        return jsonify({"error": "Error en servidor"}), 500
+
+
+
 # ——— Psicología ———
 @app.route('/psicologia', methods=['POST'])
 def psicologia():
