@@ -325,6 +325,39 @@ def consentimiento_tutor():
         logging.exception("Error en /consentimiento_tutor")
         return jsonify({"error": "Error interno"}), 500
 
+
+# ——— HRV ———
+@app.route('/add_hrv', methods=['POST'])
+def add_hrv():
+    data = request.json
+
+    try:
+        atleta_id = data.get("ID_Atleta")
+        fecha = data.get("Fecha")
+        hrv = data.get("HRV")
+
+        if not all([atleta_id, fecha, hrv]):
+            return jsonify({"error": "Faltan datos obligatorios"}), 400
+
+        conn = get_db()
+        cur = conn.cursor()
+
+        cur.execute("""
+            INSERT INTO hrv (id_atleta, fecha, hrv)
+            VALUES (%s, %s, %s)
+        """, (atleta_id, fecha, hrv))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"message": "HRV agregado correctamente"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
 # ——— Arranque ———
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
