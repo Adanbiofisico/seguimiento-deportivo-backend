@@ -144,8 +144,7 @@ def home():
 def crear_atleta():
     data = request.get_json() or {}
     
-    # Campos obligatorios
-    required = ['nombre', 'fecha_nacimiento', 'disciplina', 'sexo']
+    required = ['nombre', 'fecha_de_nacimiento', 'deporte', 'genero']
     for campo in required:
         if campo not in data:
             return jsonify({"error": f"Campo '{campo}' es obligatorio"}), 400
@@ -155,14 +154,14 @@ def crear_atleta():
             with conn.cursor() as c:
                 c.execute("""
                     INSERT INTO atletas 
-                    (nombre, fecha_nacimiento, disciplina, sexo)
+                    (nombre, fecha_de_nacimiento, deporte, genero)
                     VALUES (%s, %s, %s, %s)
                     RETURNING id_atleta;
                 """, (
                     data['nombre'],
-                    data['fecha_nacimiento'],
-                    data['disciplina'],
-                    data['sexo']
+                    data['fecha_de_nacimiento'],
+                    data['deporte'],
+                    data['genero']
                 ))
                 nuevo_id = c.fetchone()[0]
             conn.commit()
@@ -175,6 +174,33 @@ def crear_atleta():
     except Exception as e:
         logging.exception("Error en /crear_atleta")
         return jsonify({"error": "Error al crear atleta"}), 500
+
+
+@app.route('/atletas', methods=['GET'])
+def listar_atletas():
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    SELECT id_atleta, nombre, deporte 
+                    FROM atletas 
+                    ORDER BY nombre
+                """)
+                atletas = c.fetchall()
+                
+                resultado = []
+                for a in atletas:
+                    resultado.append({
+                        "id": a[0],
+                        "nombre": a[1],
+                        "deporte": a[2] if a[2] else "No especificado"
+                    })
+                
+        return jsonify(resultado), 200
+    except Exception as e:
+        logging.exception("Error en /atletas")
+        return jsonify({"error": "Error al listar atletas"}), 500
+
 
 @app.route("/get_atleta", methods=["POST"])
 def get_atleta():
