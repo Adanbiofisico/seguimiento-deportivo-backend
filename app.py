@@ -20,6 +20,27 @@ def get_db():
 def init_db():
     with get_db() as conn:
         with conn.cursor() as cursor:
+            # Tabla ATLETAS (¡IMPORTANTE!)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS atletas (
+                    id_atleta SERIAL PRIMARY KEY,
+                    nombre TEXT NOT NULL,
+                    fecha_nacimiento DATE,
+                    disciplina TEXT,
+                    sexo TEXT,
+                    direccion TEXT,
+                    correo TEXT,
+                    telefono TEXT,
+                    genero TEXT,
+                    nacionalidad TEXT,
+                    condicion_fisica TEXT,
+                    nivel_competitivo TEXT,
+                    categoria_edad TEXT,
+                    equipo TEXT,
+                    fecha_ingreso DATE DEFAULT CURRENT_DATE,
+                    lugar_nacimiento TEXT
+                );
+            """)
             # Psicología
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS psicologia (
@@ -107,27 +128,6 @@ def init_db():
                     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
-             # Tabla ATLETAS (¡FALTANTE!)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS atletas (
-                    id_atleta SERIAL PRIMARY KEY,
-                    nombre TEXT NOT NULL,
-                    fecha_nacimiento DATE,
-                    disciplina TEXT,
-                    sexo TEXT,
-                    direccion TEXT,
-                    correo TEXT,
-                    telefono TEXT,
-                    genero TEXT,
-                    nacionalidad TEXT,
-                    condicion_fisica TEXT,
-                    nivel_competitivo TEXT,
-                    categoria_edad TEXT,
-                    equipo TEXT,
-                    fecha_ingreso DATE DEFAULT CURRENT_DATE,
-                    lugar_nacimiento TEXT
-                );
-            """)
         conn.commit()
 
 init_db()
@@ -138,49 +138,13 @@ init_db()
 def home():
     return jsonify({"estado": "API corriendo"}), 200
 
-
-# ——— Crear atleta ———
-@app.route('/crear_atleta', methods=['POST'])
-def crear_atleta():
-    data = request.get_json() or {}
-    
-    required = ['nombre', 'fecha_de_nacimiento', 'deporte', 'genero']
-    for campo in required:
-        if campo not in data:
-            return jsonify({"error": f"Campo '{campo}' es obligatorio"}), 400
-    
-    try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    INSERT INTO atletas 
-                    (nombre, fecha_de_nacimiento, deporte, genero)
-                    VALUES (%s, %s, %s, %s)
-                    RETURNING id_atleta;
-                """, (
-                    data['nombre'],
-                    data['fecha_de_nacimiento'],
-                    data['deporte'],
-                    data['genero']
-                ))
-                nuevo_id = c.fetchone()[0]
-            conn.commit()
-        
-        return jsonify({
-            "mensaje": "Atleta creado exitosamente",
-            "id_atleta": nuevo_id
-        }), 200
-        
-    except Exception as e:
-        logging.exception("Error en /crear_atleta")
-        return jsonify({"error": "Error al crear atleta"}), 500
-
-
+# ——— Listar atletas ———
 @app.route('/atletas', methods=['GET'])
 def listar_atletas():
     try:
         with get_db() as conn:
             with conn.cursor() as c:
+                # CORRECCIÓN: Usar 'deporte' en lugar de 'disciplina'
                 c.execute("""
                     SELECT id_atleta, nombre, deporte 
                     FROM atletas 
@@ -201,29 +165,43 @@ def listar_atletas():
         logging.exception("Error en /atletas")
         return jsonify({"error": "Error al listar atletas"}), 500
 
-
-@app.route("/get_atleta", methods=["POST"])
-def get_atleta():
-    data = request.get_json()
-    nombre = data.get("nombre")
-
+# ——— Crear atleta ———
+@app.route('/crear_atleta', methods=['POST'])
+def crear_atleta():
+    data = request.get_json() or {}
+    
+    # CORRECCIÓN: Usar los nombres correctos de la tabla
+    required = ['nombre', 'fecha_nacimiento', 'disciplina', 'sexo']
+    for campo in required:
+        if campo not in data:
+            return jsonify({"error": f"Campo '{campo}' es obligatorio"}), 400
+    
     try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT id_atleta FROM atletas WHERE nombre = %s", (nombre,))
-        result = cur.fetchone()
-        cur.close()
-        conn.close()
-
-        if result:
-            return jsonify({"id_atleta": result[0]})
-        else:
-            return jsonify({"error": "Atleta no encontrado"}), 404
-
+        with get_db() as conn:
+            with conn.cursor() as c:
+                # CORRECCIÓN: Usar nombres de columna correctos de la tabla
+                c.execute("""
+                    INSERT INTO atletas 
+                    (nombre, fecha_nacimiento, disciplina, sexo)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id_atleta;
+                """, (
+                    data['nombre'],
+                    data['fecha_nacimiento'],
+                    data['disciplina'],
+                    data['sexo']
+                ))
+                nuevo_id = c.fetchone()[0]
+            conn.commit()
+        
+        return jsonify({
+            "mensaje": "Atleta creado exitosamente",
+            "id_atleta": nuevo_id
+        }), 200
+        
     except Exception as e:
-        print("Error:", e)
-        return jsonify({"error": "Error en servidor"}), 500
-
+        logging.exception("Error en /crear_atleta")
+        return jsonify({"error": "Error al crear atleta"}), 500
 
 # ——— Obtener atleta por ID ———
 @app.route('/atletas/<int:id_atleta>', methods=['GET'])
@@ -248,6 +226,28 @@ def obtener_atleta(id_atleta):
     except Exception as e:
         logging.exception(f"Error en /atletas/{id_atleta}")
         return jsonify({"error": "Error al obtener atleta"}), 500
+
+@app.route("/get_atleta", methods=["POST"])
+def get_atleta():
+    data = request.get_json()
+    nombre = data.get("nombre")
+
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT id_atleta FROM atletas WHERE nombre = %s", (nombre,))
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if result:
+            return jsonify({"id_atleta": result[0]})
+        else:
+            return jsonify({"error": "Atleta no encontrado"}), 404
+
+    except Exception as e:
+        print("Error:", e)
+        return jsonify({"error": "Error en servidor"}), 500
 
 # ——— Psicología ———
 @app.route('/psicologia', methods=['POST'])
@@ -457,7 +457,6 @@ def consentimiento_tutor():
         logging.exception("Error en /consentimiento_tutor")
         return jsonify({"error": "Error interno"}), 500
 
-
 # ——— HRV ———
 @app.route('/add_hrv', methods=['POST'])
 def add_hrv():
@@ -487,33 +486,6 @@ def add_hrv():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-# ——— Listar atletas ———
-@app.route('/atletas', methods=['GET'])
-def listar_atletas():
-    try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    SELECT id_atleta, nombre, disciplina 
-                    FROM atletas 
-                    ORDER BY nombre
-                """)
-                atletas = c.fetchall()
-                
-                # Convertir a lista de diccionarios
-                resultado = []
-                for a in atletas:
-                    resultado.append({
-                        "id": a[0],
-                        "nombre": a[1],
-                        "deporte": a[2] if a[2] else "No especificado"
-                    })
-                
-        return jsonify(resultado), 200
-    except Exception as e:
-        logging.exception("Error en /atletas")
-        return jsonify({"error": "Error al listar atletas"}), 500
 
 # ——— Arranque ———
 if __name__ == '__main__':
