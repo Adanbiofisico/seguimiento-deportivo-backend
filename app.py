@@ -107,6 +107,27 @@ def init_db():
                     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+             # Tabla ATLETAS (¡FALTANTE!)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS atletas (
+                    id_atleta SERIAL PRIMARY KEY,
+                    nombre TEXT NOT NULL,
+                    fecha_nacimiento DATE,
+                    disciplina TEXT,
+                    sexo TEXT,
+                    direccion TEXT,
+                    correo TEXT,
+                    telefono TEXT,
+                    genero TEXT,
+                    nacionalidad TEXT,
+                    condicion_fisica TEXT,
+                    nivel_competitivo TEXT,
+                    categoria_edad TEXT,
+                    equipo TEXT,
+                    fecha_ingreso DATE DEFAULT CURRENT_DATE,
+                    lugar_nacimiento TEXT
+                );
+            """)
         conn.commit()
 
 init_db()
@@ -116,6 +137,44 @@ init_db()
 @app.route('/', methods=['GET'])
 def home():
     return jsonify({"estado": "API corriendo"}), 200
+
+
+# ——— Crear atleta ———
+@app.route('/crear_atleta', methods=['POST'])
+def crear_atleta():
+    data = request.get_json() or {}
+    
+    # Campos obligatorios
+    required = ['nombre', 'fecha_nacimiento', 'disciplina', 'sexo']
+    for campo in required:
+        if campo not in data:
+            return jsonify({"error": f"Campo '{campo}' es obligatorio"}), 400
+    
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    INSERT INTO atletas 
+                    (nombre, fecha_nacimiento, disciplina, sexo)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id_atleta;
+                """, (
+                    data['nombre'],
+                    data['fecha_nacimiento'],
+                    data['disciplina'],
+                    data['sexo']
+                ))
+                nuevo_id = c.fetchone()[0]
+            conn.commit()
+        
+        return jsonify({
+            "mensaje": "Atleta creado exitosamente",
+            "id_atleta": nuevo_id
+        }), 200
+        
+    except Exception as e:
+        logging.exception("Error en /crear_atleta")
+        return jsonify({"error": "Error al crear atleta"}), 500
 
 @app.route("/get_atleta", methods=["POST"])
 def get_atleta():
@@ -140,6 +199,29 @@ def get_atleta():
         return jsonify({"error": "Error en servidor"}), 500
 
 
+# ——— Obtener atleta por ID ———
+@app.route('/atletas/<int:id_atleta>', methods=['GET'])
+def obtener_atleta(id_atleta):
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    SELECT * FROM atletas 
+                    WHERE id_atleta = %s
+                """, (id_atleta,))
+                atleta = c.fetchone()
+                
+                if not atleta:
+                    return jsonify({"error": "Atleta no encontrado"}), 404
+                
+                # Convertir a diccionario
+                columnas = [desc[0] for desc in c.description]
+                atleta_dict = dict(zip(columnas, atleta))
+                
+        return jsonify(atleta_dict), 200
+    except Exception as e:
+        logging.exception(f"Error en /atletas/{id_atleta}")
+        return jsonify({"error": "Error al obtener atleta"}), 500
 
 # ——— Psicología ———
 @app.route('/psicologia', methods=['POST'])
@@ -380,7 +462,32 @@ def add_hrv():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
+# ——— Listar atletas ———
+@app.route('/atletas', methods=['GET'])
+def listar_atletas():
+    try:
+        with get_db() as conn:
+            with conn.cursor() as c:
+                c.execute("""
+                    SELECT id_atleta, nombre, disciplina 
+                    FROM atletas 
+                    ORDER BY nombre
+                """)
+                atletas = c.fetchall()
+                
+                # Convertir a lista de diccionarios
+                resultado = []
+                for a in atletas:
+                    resultado.append({
+                        "id": a[0],
+                        "nombre": a[1],
+                        "deporte": a[2] if a[2] else "No especificado"
+                    })
+                
+        return jsonify(resultado), 200
+    except Exception as e:
+        logging.exception("Error en /atletas")
+        return jsonify({"error": "Error al listar atletas"}), 500
 
 # ——— Arranque ———
 if __name__ == '__main__':
