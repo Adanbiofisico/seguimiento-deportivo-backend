@@ -490,6 +490,33 @@ def add_hrv():
     except Exception as e:
         return jsonify({"error": "Error interno del servidor"}), 500
 
+@app.route('/hrv/<int:id_atleta>', methods=['GET'])
+def get_hrv(id_atleta):
+
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT fecha, hrv
+            FROM hrv
+            WHERE id_atleta = %s
+            ORDER BY fecha ASC;
+        """, (id_atleta,))
+
+        rows = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+        return jsonify([
+            {"fecha": str(r[0]), "hrv": float(r[1])}
+            for r in rows
+        ]), 200
+
+    except Exception as e:
+        return jsonify({"error": "Error interno"}), 500
+
 # ——— Arranque ———
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
