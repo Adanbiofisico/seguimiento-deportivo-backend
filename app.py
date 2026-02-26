@@ -130,7 +130,7 @@ def init_db():
             """)
         conn.commit()
 
-init_db()
+
 
 # ——— RUTAS ———
 
