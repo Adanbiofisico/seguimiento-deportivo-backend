@@ -20,7 +20,7 @@ def get_db():
 def init_db():
     with get_db() as conn:
         with conn.cursor() as cursor:
-            # Tabla ATLETAS (¡IMPORTANTE!)
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS atletas (
                     id_atleta SERIAL PRIMARY KEY,
@@ -41,7 +41,7 @@ def init_db():
                     lugar_nacimiento TEXT
                 );
             """)
-            # Psicología
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS psicologia (
                     id SERIAL PRIMARY KEY,
@@ -52,7 +52,7 @@ def init_db():
                     observaciones TEXT
                 );
             """)
-            # Nutrición
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS nutricion (
                     id SERIAL PRIMARY KEY,
@@ -65,7 +65,7 @@ def init_db():
                     UNIQUE (id_atleta, fecha)
                 );
             """)
-            # Médico
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS medico (
                     id SERIAL PRIMARY KEY,
@@ -78,7 +78,7 @@ def init_db():
                     observaciones TEXT
                 );
             """)
-            # Entrenamiento
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS entrenamiento (
                     id SERIAL PRIMARY KEY,
@@ -89,7 +89,7 @@ def init_db():
                     observaciones TEXT
                 );
             """)
-            # Evento
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS evento (
                     id SERIAL PRIMARY KEY,
@@ -100,7 +100,7 @@ def init_db():
                     descripcion TEXT
                 );
             """)
-            # Autoseguimiento
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS autoseguimiento (
                     id SERIAL PRIMARY KEY,
@@ -115,7 +115,7 @@ def init_db():
                     comentarios TEXT
                 );
             """)
-            # Consentimientos de tutores
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS Consentimientos_Tutores (
                     id SERIAL PRIMARY KEY,
@@ -128,9 +128,25 @@ def init_db():
                     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS hrv (
+                    id SERIAL PRIMARY KEY,
+                    id_atleta INTEGER NOT NULL,
+                    fecha DATE NOT NULL,
+                    hrv REAL
+                );
+            """)
+
         conn.commit()
 
-
+# Ejecutar tablas al iniciar
+with app.app_context():
+    try:
+        init_db()
+        logging.info("Base de datos inicializada correctamente")
+    except Exception:
+        logging.exception("Error inicializando base de datos")
 
 # ——— RUTAS ———
 
@@ -144,24 +160,23 @@ def listar_atletas():
     try:
         with get_db() as conn:
             with conn.cursor() as c:
-                # CORRECCIÓN: Usar 'deporte' en lugar de 'disciplina'
                 c.execute("""
-                    SELECT id_atleta, nombre, deporte 
+                    SELECT id_atleta, nombre, disciplina 
                     FROM atletas 
                     ORDER BY nombre
                 """)
                 atletas = c.fetchall()
-                
+
                 resultado = []
                 for a in atletas:
                     resultado.append({
                         "id": a[0],
                         "nombre": a[1],
-                        "deporte": a[2] if a[2] else "No especificado"
+                        "disciplina": a[2] if a[2] else "No especificado"
                     })
-                
+
         return jsonify(resultado), 200
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /atletas")
         return jsonify({"error": "Error al listar atletas"}), 500
 
@@ -169,17 +184,14 @@ def listar_atletas():
 @app.route('/crear_atleta', methods=['POST'])
 def crear_atleta():
     data = request.get_json() or {}
-    
-    # CORRECCIÓN: Usar los nombres correctos de la tabla
     required = ['nombre', 'fecha_nacimiento', 'disciplina', 'sexo']
     for campo in required:
         if campo not in data:
             return jsonify({"error": f"Campo '{campo}' es obligatorio"}), 400
-    
+
     try:
         with get_db() as conn:
             with conn.cursor() as c:
-                # CORRECCIÓN: Usar nombres de columna correctos de la tabla
                 c.execute("""
                     INSERT INTO atletas 
                     (nombre, fecha_nacimiento, disciplina, sexo)
@@ -193,13 +205,12 @@ def crear_atleta():
                 ))
                 nuevo_id = c.fetchone()[0]
             conn.commit()
-        
+
         return jsonify({
             "mensaje": "Atleta creado exitosamente",
             "id_atleta": nuevo_id
         }), 200
-        
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /crear_atleta")
         return jsonify({"error": "Error al crear atleta"}), 500
 
@@ -209,44 +220,41 @@ def obtener_atleta(id_atleta):
     try:
         with get_db() as conn:
             with conn.cursor() as c:
-                c.execute("""
-                    SELECT * FROM atletas 
-                    WHERE id_atleta = %s
-                """, (id_atleta,))
+                c.execute("SELECT * FROM atletas WHERE id_atleta = %s", (id_atleta,))
                 atleta = c.fetchone()
-                
+
                 if not atleta:
                     return jsonify({"error": "Atleta no encontrado"}), 404
-                
-                # Convertir a diccionario
+
                 columnas = [desc[0] for desc in c.description]
                 atleta_dict = dict(zip(columnas, atleta))
-                
+
         return jsonify(atleta_dict), 200
-    except Exception as e:
-        logging.exception(f"Error en /atletas/{id_atleta}")
+    except Exception:
+        logging.exception("Error en /atletas/<id>")
         return jsonify({"error": "Error al obtener atleta"}), 500
 
 @app.route("/get_atleta", methods=["POST"])
 def get_atleta():
-    data = request.get_json()
+    data = request.get_json() or {}
     nombre = data.get("nombre")
 
+    if not nombre:
+        return jsonify({"error": "Nombre es obligatorio"}), 400
+
     try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT id_atleta FROM atletas WHERE nombre = %s", (nombre,))
-        result = cur.fetchone()
-        cur.close()
-        conn.close()
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id_atleta FROM atletas WHERE nombre = %s", (nombre,))
+                result = cur.fetchone()
 
         if result:
             return jsonify({"id_atleta": result[0]})
         else:
             return jsonify({"error": "Atleta no encontrado"}), 404
 
-    except Exception as e:
-        print("Error:", e)
+    except Exception:
+        logging.exception("Error en /get_atleta")
         return jsonify({"error": "Error en servidor"}), 500
 
 # ——— Psicología ———
@@ -273,7 +281,7 @@ def psicologia():
                 ))
             conn.commit()
         return jsonify({"mensaje":"Psicología registrada"}), 200
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /psicologia")
         return jsonify({"error":"Error interno"}), 500
 
@@ -305,7 +313,7 @@ def nutricion():
                 ))
             conn.commit()
         return jsonify({"mensaje":"Nutrición registrada"}), 200
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /nutricion")
         return jsonify({"error":"Error interno"}), 500
 
@@ -333,7 +341,7 @@ def medico():
                 ))
             conn.commit()
         return jsonify({"mensaje":"Médico registrado"}), 200
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /medico")
         return jsonify({"error":"Error interno"}), 500
 
@@ -359,7 +367,7 @@ def entrenamiento():
                 ))
             conn.commit()
         return jsonify({"mensaje": "Entrenamiento registrado"}), 200
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /entrenamiento")
         return jsonify({"error": "Error interno"}), 500
 
@@ -385,7 +393,7 @@ def agregar_evento():
                 ))
             conn.commit()
         return jsonify({"mensaje":"Evento registrado"}), 200
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /add_evento")
         return jsonify({"error":"Error interno"}), 500
 
@@ -421,11 +429,11 @@ def agregar_autoseguimiento():
                 ))
             conn.commit()
         return jsonify({"mensaje":"Autoseguimiento registrado"}), 200
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /add_autoseguimiento")
         return jsonify({"error":"Error interno"}), 500
 
-# ——— Consentimiento de tutores (GET y POST en una sola ruta) ———
+# ——— Consentimiento de tutores ———
 @app.route('/consentimiento_tutor', methods=['GET', 'POST'])
 def consentimiento_tutor():
     if request.method == 'GET':
@@ -453,16 +461,14 @@ def consentimiento_tutor():
                 ))
             conn.commit()
         return jsonify({"mensaje": "Consentimiento de tutor registrado correctamente"}), 200
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /consentimiento_tutor")
         return jsonify({"error": "Error interno"}), 500
 
 # ——— HRV ———
 @app.route('/add_hrv', methods=['POST'])
 def add_hrv():
-
     data = request.get_json() or {}
-
     atleta_id = data.get("id_atleta")
     hrv_value = data.get("hrv")
 
@@ -487,12 +493,11 @@ def add_hrv():
 
         return jsonify({"message": "HRV agregado correctamente"}), 200
 
-    except Exception as e:
+    except Exception:
         return jsonify({"error": "Error interno del servidor"}), 500
 
 @app.route('/hrv/<int:id_atleta>', methods=['GET'])
 def get_hrv(id_atleta):
-
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -514,9 +519,10 @@ def get_hrv(id_atleta):
             for r in rows
         ]), 200
 
-    except Exception as e:
+    except Exception:
         return jsonify({"error": "Error interno"}), 500
 
-# ——— Arranque ———
+# ——— Arranque compatible con Render ———
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
