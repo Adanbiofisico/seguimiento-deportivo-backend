@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import psycopg2
+from psycopg2 import pool
 import os
 from datetime import datetime
 import logging
@@ -9,18 +10,38 @@ import logging
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 CORS(app)
+
 DATABASE_URL = os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL no configurada")
+
+# ——— Pool de conexiones ———
+try:
+    db_pool = psycopg2.pool.SimpleConnectionPool(
+        1, 20,  # min 1, max 20 conexiones
+        dsn=DATABASE_URL
+    )
+    logging.info("Pool de conexiones a la DB creado correctamente")
+except Exception:
+    logging.exception("Error creando pool de conexiones")
+    raise
 
 def get_db():
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL no configurada")
-    return psycopg2.connect(DATABASE_URL)
+    try:
+        return db_pool.getconn()
+    except Exception:
+        logging.exception("Error obteniendo conexión de pool")
+        raise
+
+def release_db(conn):
+    if conn:
+        db_pool.putconn(conn)
 
 # ——— Creación / migración de tablas ———
 def init_db():
-    with get_db() as conn:
+    conn = get_db()
+    try:
         with conn.cursor() as cursor:
-
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS atletas (
                     id_atleta SERIAL PRIMARY KEY,
@@ -41,7 +62,6 @@ def init_db():
                     lugar_nacimiento TEXT
                 );
             """)
-
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS psicologia (
                     id SERIAL PRIMARY KEY,
@@ -52,7 +72,6 @@ def init_db():
                     observaciones TEXT
                 );
             """)
-
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS nutricion (
                     id SERIAL PRIMARY KEY,
@@ -65,7 +84,6 @@ def init_db():
                     UNIQUE (id_atleta, fecha)
                 );
             """)
-
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS medico (
                     id SERIAL PRIMARY KEY,
@@ -78,7 +96,6 @@ def init_db():
                     observaciones TEXT
                 );
             """)
-
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS entrenamiento (
                     id SERIAL PRIMARY KEY,
@@ -89,7 +106,6 @@ def init_db():
                     observaciones TEXT
                 );
             """)
-
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS evento (
                     id SERIAL PRIMARY KEY,
@@ -100,7 +116,6 @@ def init_db():
                     descripcion TEXT
                 );
             """)
-
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS autoseguimiento (
                     id SERIAL PRIMARY KEY,
@@ -115,7 +130,6 @@ def init_db():
                     comentarios TEXT
                 );
             """)
-
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS Consentimientos_Tutores (
                     id SERIAL PRIMARY KEY,
@@ -128,7 +142,6 @@ def init_db():
                     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
-
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS hrv (
                     id SERIAL PRIMARY KEY,
@@ -137,8 +150,9 @@ def init_db():
                     hrv REAL
                 );
             """)
-
         conn.commit()
+    finally:
+        release_db(conn)
 
 # Ejecutar tablas al iniciar
 with app.app_context():
@@ -157,28 +171,18 @@ def home():
 # ——— Listar atletas ———
 @app.route('/atletas', methods=['GET'])
 def listar_atletas():
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    SELECT id_atleta, nombre, disciplina 
-                    FROM atletas 
-                    ORDER BY nombre
-                """)
-                atletas = c.fetchall()
-
-                resultado = []
-                for a in atletas:
-                    resultado.append({
-                        "id": a[0],
-                        "nombre": a[1],
-                        "disciplina": a[2] if a[2] else "No especificado"
-                    })
-
+        with conn.cursor() as c:
+            c.execute("SELECT id_atleta, nombre, disciplina FROM atletas ORDER BY nombre")
+            atletas = c.fetchall()
+            resultado = [{"id": a[0], "nombre": a[1], "disciplina": a[2] or "No especificado"} for a in atletas]
         return jsonify(resultado), 200
     except Exception:
         logging.exception("Error en /atletas")
         return jsonify({"error": "Error al listar atletas"}), 500
+    finally:
+        release_db(conn)
 
 # ——— Crear atleta ———
 @app.route('/crear_atleta', methods=['POST'])
@@ -189,73 +193,64 @@ def crear_atleta():
         if campo not in data:
             return jsonify({"error": f"Campo '{campo}' es obligatorio"}), 400
 
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    INSERT INTO atletas 
-                    (nombre, fecha_nacimiento, disciplina, sexo)
-                    VALUES (%s, %s, %s, %s)
-                    RETURNING id_atleta;
-                """, (
-                    data['nombre'],
-                    data['fecha_nacimiento'],
-                    data['disciplina'],
-                    data['sexo']
-                ))
-                nuevo_id = c.fetchone()[0]
-            conn.commit()
-
-        return jsonify({
-            "mensaje": "Atleta creado exitosamente",
-            "id_atleta": nuevo_id
-        }), 200
+        with conn.cursor() as c:
+            c.execute("""
+                INSERT INTO atletas (nombre, fecha_nacimiento, disciplina, sexo)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id_atleta;
+            """, (data['nombre'], data['fecha_nacimiento'], data['disciplina'], data['sexo']))
+            nuevo_id = c.fetchone()[0]
+        conn.commit()
+        return jsonify({"mensaje": "Atleta creado exitosamente", "id_atleta": nuevo_id}), 200
     except Exception:
         logging.exception("Error en /crear_atleta")
         return jsonify({"error": "Error al crear atleta"}), 500
+    finally:
+        release_db(conn)
 
 # ——— Obtener atleta por ID ———
 @app.route('/atletas/<int:id_atleta>', methods=['GET'])
 def obtener_atleta(id_atleta):
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("SELECT * FROM atletas WHERE id_atleta = %s", (id_atleta,))
-                atleta = c.fetchone()
-
-                if not atleta:
-                    return jsonify({"error": "Atleta no encontrado"}), 404
-
-                columnas = [desc[0] for desc in c.description]
-                atleta_dict = dict(zip(columnas, atleta))
-
+        with conn.cursor() as c:
+            c.execute("SELECT * FROM atletas WHERE id_atleta = %s", (id_atleta,))
+            atleta = c.fetchone()
+            if not atleta:
+                return jsonify({"error": "Atleta no encontrado"}), 404
+            columnas = [desc[0] for desc in c.description]
+            atleta_dict = dict(zip(columnas, atleta))
         return jsonify(atleta_dict), 200
     except Exception:
         logging.exception("Error en /atletas/<id>")
         return jsonify({"error": "Error al obtener atleta"}), 500
+    finally:
+        release_db(conn)
 
+# ——— Get atleta por nombre ———
 @app.route("/get_atleta", methods=["POST"])
 def get_atleta():
     data = request.get_json() or {}
     nombre = data.get("nombre")
-
     if not nombre:
         return jsonify({"error": "Nombre es obligatorio"}), 400
 
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id_atleta FROM atletas WHERE nombre = %s", (nombre,))
-                result = cur.fetchone()
-
+        with conn.cursor() as cur:
+            cur.execute("SELECT id_atleta FROM atletas WHERE nombre = %s", (nombre,))
+            result = cur.fetchone()
         if result:
-            return jsonify({"id_atleta": result[0]})
+            return jsonify({"id_atleta": result[0]}), 200
         else:
             return jsonify({"error": "Atleta no encontrado"}), 404
-
     except Exception:
         logging.exception("Error en /get_atleta")
         return jsonify({"error": "Error en servidor"}), 500
+    finally:
+        release_db(conn)
 
 # ——— Psicología ———
 @app.route('/psicologia', methods=['POST'])
@@ -266,24 +261,20 @@ def psicologia():
             return jsonify({"error": f"{k} es obligatorio"}), 400
     observaciones = data.get('observaciones', '')
 
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    INSERT INTO psicologia (atleta_id, estado_emocional, motivacion, estres, observaciones)
-                    VALUES (%s, %s, %s, %s, %s);
-                """, (
-                    int(data['atleta_id']),
-                    data['estado_emocional'],
-                    data['motivacion'],
-                    int(data['estres']),
-                    observaciones
-                ))
-            conn.commit()
+        with conn.cursor() as c:
+            c.execute("""
+                INSERT INTO psicologia (atleta_id, estado_emocional, motivacion, estres, observaciones)
+                VALUES (%s, %s, %s, %s, %s);
+            """, (int(data['atleta_id']), data['estado_emocional'], data['motivacion'], int(data['estres']), observaciones))
+        conn.commit()
         return jsonify({"mensaje":"Psicología registrada"}), 200
     except Exception:
         logging.exception("Error en /psicologia")
         return jsonify({"error":"Error interno"}), 500
+    finally:
+        release_db(conn)
 
 # ——— Nutrición ———
 @app.route('/nutricion', methods=['POST'])
@@ -292,30 +283,27 @@ def nutricion():
     for k in ('id_atleta','fecha','peso','altura','imc','observaciones'):
         if k not in data:
             return jsonify({"error": f"{k} es obligatorio"}), 400
+
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    INSERT INTO nutricion (id_atleta, fecha, peso, altura, imc, observaciones)
-                    VALUES (%s,%s,%s,%s,%s,%s)
-                    ON CONFLICT (id_atleta, fecha) DO UPDATE SET
-                      peso = EXCLUDED.peso,
-                      altura = EXCLUDED.altura,
-                      imc = EXCLUDED.imc,
-                      observaciones = EXCLUDED.observaciones;
-                """, (
-                    int(data['id_atleta']),
-                    datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
-                    float(data['peso']),
-                    float(data['altura']),
-                    float(data['imc']),
-                    data['observaciones']
-                ))
-            conn.commit()
+        with conn.cursor() as c:
+            c.execute("""
+                INSERT INTO nutricion (id_atleta, fecha, peso, altura, imc, observaciones)
+                VALUES (%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (id_atleta, fecha) DO UPDATE SET
+                  peso = EXCLUDED.peso,
+                  altura = EXCLUDED.altura,
+                  imc = EXCLUDED.imc,
+                  observaciones = EXCLUDED.observaciones;
+            """, (int(data['id_atleta']), datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
+                  float(data['peso']), float(data['altura']), float(data['imc']), data['observaciones']))
+        conn.commit()
         return jsonify({"mensaje":"Nutrición registrada"}), 200
     except Exception:
         logging.exception("Error en /nutricion")
         return jsonify({"error":"Error interno"}), 500
+    finally:
+        release_db(conn)
 
 # ——— Médico ———
 @app.route('/medico', methods=['POST'])
@@ -324,26 +312,23 @@ def medico():
     for k in ('id_atleta','fecha','temperatura','presion_arterial','diagnostico','tratamiento','observaciones'):
         if k not in data:
             return jsonify({"error": f"{k} es obligatorio"}), 400
+
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    INSERT INTO medico (atleta_id, fecha, temperatura, presion_arterial, diagnostico, tratamiento, observaciones)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s);
-                """, (
-                    int(data['id_atleta']),
-                    datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
-                    float(data['temperatura']),
-                    data['presion_arterial'],
-                    data['diagnostico'],
-                    data['tratamiento'],
-                    data['observaciones']
-                ))
-            conn.commit()
+        with conn.cursor() as c:
+            c.execute("""
+                INSERT INTO medico (atleta_id, fecha, temperatura, presion_arterial, diagnostico, tratamiento, observaciones)
+                VALUES (%s,%s,%s,%s,%s,%s,%s);
+            """, (int(data['id_atleta']), datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
+                  float(data['temperatura']), data['presion_arterial'], data['diagnostico'],
+                  data['tratamiento'], data['observaciones']))
+        conn.commit()
         return jsonify({"mensaje":"Médico registrado"}), 200
     except Exception:
         logging.exception("Error en /medico")
         return jsonify({"error":"Error interno"}), 500
+    finally:
+        release_db(conn)
 
 # ——— Entrenamiento ———
 @app.route('/entrenamiento', methods=['POST'])
@@ -352,24 +337,22 @@ def entrenamiento():
     for k in ('atleta_id', 'tipo_entrenamiento', 'duracion', 'intensidad', 'observaciones'):
         if k not in data:
             return jsonify({"error": f"{k} es obligatorio"}), 400
+
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    INSERT INTO entrenamiento (atleta_id, tipo_entrenamiento, duracion, intensidad, observaciones)
-                    VALUES (%s,%s,%s,%s,%s);
-                """, (
-                    data['atleta_id'],
-                    data['tipo_entrenamiento'],
-                    int(data['duracion']),
-                    data['intensidad'],
-                    data['observaciones']
-                ))
-            conn.commit()
+        with conn.cursor() as c:
+            c.execute("""
+                INSERT INTO entrenamiento (id_atleta, tipo_entrenamiento, duracion, intensidad, observaciones)
+                VALUES (%s,%s,%s,%s,%s);
+            """, (data['atleta_id'], data['tipo_entrenamiento'], int(data['duracion']),
+                  data['intensidad'], data['observaciones']))
+        conn.commit()
         return jsonify({"mensaje": "Entrenamiento registrado"}), 200
     except Exception:
         logging.exception("Error en /entrenamiento")
         return jsonify({"error": "Error interno"}), 500
+    finally:
+        release_db(conn)
 
 # ——— Eventos ———
 @app.route('/add_evento', methods=['POST'])
@@ -378,24 +361,22 @@ def agregar_evento():
     for k in ('id_atleta','nombre','fecha','lugar','descripcion'):
         if k not in data:
             return jsonify({"error": f"{k} es obligatorio"}), 400
+
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    INSERT INTO evento (id_atleta, nombre, fecha, lugar, descripcion)
-                    VALUES (%s,%s,%s,%s,%s);
-                """, (
-                    int(data['id_atleta']),
-                    data['nombre'],
-                    datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
-                    data['lugar'],
-                    data['descripcion']
-                ))
-            conn.commit()
+        with conn.cursor() as c:
+            c.execute("""
+                INSERT INTO evento (id_atleta, nombre, fecha, lugar, descripcion)
+                VALUES (%s,%s,%s,%s,%s);
+            """, (int(data['id_atleta']), data['nombre'], datetime.strptime(data['fecha'],'%Y-%m-%d').date(),
+                  data['lugar'], data['descripcion']))
+        conn.commit()
         return jsonify({"mensaje":"Evento registrado"}), 200
     except Exception:
         logging.exception("Error en /add_evento")
         return jsonify({"error":"Error interno"}), 500
+    finally:
+        release_db(conn)
 
 # ——— Autoseguimiento ———
 @app.route('/add_autoseguimiento', methods=['POST'])
@@ -416,25 +397,24 @@ def agregar_autoseguimiento():
     except ValueError:
         return jsonify({"error":"Formato numérico inválido"}), 400
 
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    INSERT INTO autoseguimiento
-                      (id_atleta, calidad_sueno, horas_sueno, fatiga, dolor_muscular, estres, estado_animo, comentarios)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s);
-                """, (
-                    id_atleta, calidad, horas,
-                    fat, dolor, est, animo, comentarios
-                ))
-            conn.commit()
+        with conn.cursor() as c:
+            c.execute("""
+                INSERT INTO autoseguimiento
+                (id_atleta, calidad_sueno, horas_sueno, fatiga, dolor_muscular, estres, estado_animo, comentarios)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s);
+            """, (id_atleta, calidad, horas, fat, dolor, est, animo, comentarios))
+        conn.commit()
         return jsonify({"mensaje":"Autoseguimiento registrado"}), 200
     except Exception:
         logging.exception("Error en /add_autoseguimiento")
         return jsonify({"error":"Error interno"}), 500
+    finally:
+        release_db(conn)
 
 # ——— Consentimiento de tutores ———
-@app.route('/consentimiento_tutor', methods=['GET', 'POST'])
+@app.route('/consentimiento_tutor', methods=['GET','POST'])
 def consentimiento_tutor():
     if request.method == 'GET':
         return app.send_static_file('legal/consentimiento_tutor.html')
@@ -444,26 +424,22 @@ def consentimiento_tutor():
         if campo not in data:
             return jsonify({"error": f"{campo} es obligatorio"}), 400
 
+    conn = get_db()
     try:
-        with get_db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                    INSERT INTO Consentimientos_Tutores
-                    (nombre_menor, edad_menor, nombre_tutor, relacion_tutor, contacto_tutor, aceptado)
-                    VALUES (%s, %s, %s, %s, %s, %s);
-                """, (
-                    data['nombre_menor'],
-                    int(data['edad_menor']),
-                    data['nombre_tutor'],
-                    data.get('relacion_tutor', None),
-                    data['contacto_tutor'],
-                    True
-                ))
-            conn.commit()
+        with conn.cursor() as c:
+            c.execute("""
+                INSERT INTO Consentimientos_Tutores
+                (nombre_menor, edad_menor, nombre_tutor, relacion_tutor, contacto_tutor, aceptado)
+                VALUES (%s, %s, %s, %s, %s, %s);
+            """, (data['nombre_menor'], int(data['edad_menor']), data['nombre_tutor'],
+                  data.get('relacion_tutor', None), data['contacto_tutor'], True))
+        conn.commit()
         return jsonify({"mensaje": "Consentimiento de tutor registrado correctamente"}), 200
     except Exception:
         logging.exception("Error en /consentimiento_tutor")
         return jsonify({"error": "Error interno"}), 500
+    finally:
+        release_db(conn)
 
 # ——— HRV ———
 @app.route('/add_hrv', methods=['POST'])
@@ -471,57 +447,34 @@ def add_hrv():
     data = request.get_json() or {}
     atleta_id = data.get("id_atleta")
     hrv_value = data.get("hrv")
-
     if atleta_id is None or hrv_value is None:
         return jsonify({"error": "Faltan datos obligatorios"}), 400
 
+    conn = get_db()
     try:
-        conn = get_db()
-        cur = conn.cursor()
-
-        cur.execute("""
-            INSERT INTO hrv (id_atleta, fecha, hrv)
-            VALUES (%s, CURRENT_DATE, %s)
-        """, (
-            int(atleta_id),
-            float(hrv_value)
-        ))
-
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO hrv (id_atleta, fecha, hrv) VALUES (%s, CURRENT_DATE, %s)",
+                        (int(atleta_id), float(hrv_value)))
         conn.commit()
-        cur.close()
-        conn.close()
-
         return jsonify({"message": "HRV agregado correctamente"}), 200
-
     except Exception:
+        logging.exception("Error en /add_hrv")
         return jsonify({"error": "Error interno del servidor"}), 500
+    finally:
+        release_db(conn)
 
 @app.route('/hrv/<int:id_atleta>', methods=['GET'])
 def get_hrv(id_atleta):
+    conn = get_db()
     try:
-        conn = get_db()
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT fecha, hrv
-            FROM hrv
-            WHERE id_atleta = %s
-            ORDER BY fecha ASC;
-        """, (id_atleta,))
-
-        rows = cur.fetchall()
-
-        cur.close()
-        conn.close()
-
-        return jsonify([
-            {"fecha": str(r[0]), "hrv": float(r[1])}
-            for r in rows
-        ]), 200
-
+        with conn.cursor() as cur:
+            cur.execute("SELECT fecha, hrv FROM hrv WHERE id_atleta = %s ORDER BY fecha ASC", (id_atleta,))
+            rows = cur.fetchall()
+        return jsonify([{"fecha": str(r[0]), "hrv": float(r[1])} for r in rows]), 200
     except Exception:
+        logging.exception("Error en /hrv/<id>")
         return jsonify({"error": "Error interno"}), 500
+    finally:
+        release_db(conn)
 
-# ——— Arranque compatible con Render ———
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+# ——— Fin del archivo: no usar app.run
