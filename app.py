@@ -529,61 +529,72 @@ def get_hrv_status(id_atleta: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-from flask import Flask, request, jsonify
-from datetime import datetime, date
-from models import db, Atleta, RPE  # Asegúrate de tener tu modelo Atleta y RPE
-
-app = Flask(__name__)
-
-@app.route("/add_rpe", methods=["POST"])
+@app.route('/add_rpe', methods=['POST'])
 def add_rpe():
-    data = request.get_json()
-    
+    data = request.get_json() or {}
+
+    atleta_id = data.get("id_atleta")
+    rpe_value = data.get("rpe")       # valor de RPE
+    notas = data.get("notas")         # notas opcionales
+
+    if atleta_id is None or rpe_value is None:
+        return jsonify({"error": "Faltan datos obligatorios"}), 400
+
+    conn = get_db()
     try:
-        # 1️⃣ Extraer datos
-        id_atleta = data.get("id_atleta")
-        fecha_str = data.get("fecha")
-        rpe = data.get("rpe")
-        notas = data.get("notas", "")
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO rpe
+                (id_atleta, fecha, valor, notas)
+                VALUES (%s, CURRENT_DATE, %s, %s)
+            """, (
+                int(atleta_id),
+                int(rpe_value),            # RPE generalmente es entero 1-10
+                notas if notas is not None else None
+            ))
 
-        # 2️⃣ Validaciones básicas
-        if id_atleta is None:
-            return jsonify({"status": "error", "message": "Falta id_atleta"}), 400
-        
-        atleta = Atleta.query.get(id_atleta)
-        if not atleta:
-            return jsonify({"status": "error", "message": f"Atleta {id_atleta} no existe"}), 404
+        conn.commit()
+        return jsonify({"message": "RPE agregado correctamente"}), 200
 
-        if fecha_str is None:
-            return jsonify({"status": "error", "message": "Falta fecha"}), 400
-        
-        try:
-            fecha = datetime.strptime(fecha_str, "%Y-%m-%d").date()
-        except ValueError:
-            return jsonify({"status": "error", "message": "Formato de fecha inválido, use YYYY-MM-DD"}), 400
-        
-        if fecha > date.today():
-            return jsonify({"status": "error", "message": "La fecha no puede ser futura"}), 400
+    except Exception:
+        logging.exception("Error en /add_rpe")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
-        if rpe is None:
-            return jsonify({"status": "error", "message": "Falta RPE"}), 400
-        if not (1 <= rpe <= 10):
-            return jsonify({"status": "error", "message": "RPE debe estar entre 1 y 10"}), 400
+    finally:
+        release_db(conn)
 
-        # 3️⃣ Guardar en la base de datos
-        nueva_rpe = RPE(
-            id_atleta=id_atleta,
-            fecha=fecha,
-            rpe=rpe,
-            notas=notas
-        )
-        db.session.add(nueva_rpe)
-        db.session.commit()
+@app.route('/rpe_status/<int:id_atleta>', methods=['GET'])
+def get_rpe_status(id_atleta):
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT fecha, valor, notas
+                FROM rpe
+                WHERE id_atleta = %s
+                ORDER BY fecha DESC
+                LIMIT 30
+            """, (id_atleta,))
 
-        return jsonify({"status": "success", "message": "RPE guardada correctamente"}), 201
+            rows = cur.fetchall()
 
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"status": "error", "message": str(e)}), 500
+            # Transformar en lista de dicts
+            rpe_history = [
+                {
+                    "fecha": row[0].isoformat(),
+                    "rpe": row[1],
+                    "notas": row[2]
+                }
+                for row in rows
+            ]
+
+        return jsonify({"rpe_history": rpe_history}), 200
+
+    except Exception:
+        logging.exception("Error en /rpe_status")
+        return jsonify({"error": "Error interno del servidor"}), 500
+
+    finally:
+        release_db(conn)
 
 # ——— Fin del archivo: no usar app.run
