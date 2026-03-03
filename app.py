@@ -5,6 +5,7 @@ from psycopg2 import pool
 import os
 from datetime import datetime
 import logging
+import json
 
 # ——— Configuración básica ———
 logging.basicConfig(level=logging.INFO)
@@ -442,24 +443,46 @@ def consentimiento_tutor():
         release_db(conn)
 
 # ——— HRV ———
+# ——— HRV ———
 @app.route('/add_hrv', methods=['POST'])
 def add_hrv():
     data = request.get_json() or {}
+
     atleta_id = data.get("id_atleta")
     hrv_value = data.get("hrv")
+    mean_rr = data.get("mean_rr")
+    bpm = data.get("bpm")
+    calidad_senal = data.get("calidad_senal")
+    duracion = data.get("duracion")
+    rr_intervals = data.get("rr_intervals")
+
     if atleta_id is None or hrv_value is None:
         return jsonify({"error": "Faltan datos obligatorios"}), 400
 
     conn = get_db()
     try:
         with conn.cursor() as cur:
-            cur.execute("INSERT INTO hrv (id_atleta, fecha, hrv) VALUES (%s, CURRENT_DATE, %s)",
-                        (int(atleta_id), float(hrv_value)))
+            cur.execute("""
+                INSERT INTO hrv 
+                (id_atleta, fecha, hrv, mean_rr, bpm, calidad_senal, duracion, rr_intervals)
+                VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s, %s)
+            """, (
+                int(atleta_id),
+                float(hrv_value),
+                float(mean_rr) if mean_rr is not None else None,
+                float(bpm) if bpm is not None else None,
+                int(calidad_senal) if calidad_senal is not None else None,
+                int(duracion) if duracion is not None else None,
+                json.dumps(rr_intervals) if rr_intervals is not None else None
+            ))
+
         conn.commit()
         return jsonify({"message": "HRV agregado correctamente"}), 200
+
     except Exception:
         logging.exception("Error en /add_hrv")
         return jsonify({"error": "Error interno del servidor"}), 500
+
     finally:
         release_db(conn)
 
