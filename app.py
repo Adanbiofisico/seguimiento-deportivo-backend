@@ -500,4 +500,33 @@ def get_hrv(id_atleta):
     finally:
         release_db(conn)
 
+@app.get("/hrv_status/{id_atleta}")
+def get_hrv_status(id_atleta: int):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT * FROM get_hrv_status(%s);", (id_atleta,))
+        result = cur.fetchone()
+
+        cur.close()
+        conn.close()
+
+        if not result:
+            return {
+                "message": "Datos insuficientes para análisis"
+            }
+
+        return {
+            "baseline_ln": float(result[0]),
+            "sd_ln": float(result[1]),
+            "ln_actual": float(result[2]),
+            "z_score": float(result[3]),
+            "estado": result[4],
+            "n_mediciones": int(result[5])
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ——— Fin del archivo: no usar app.run
