@@ -545,7 +545,7 @@ def add_rpe():
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO rpe
-                (id_atleta, fecha, valor, notas)
+                (id_atleta, fecha, rpe, notas)
                 VALUES (%s, CURRENT_DATE, %s, %s)
             """, (
                 int(atleta_id),
@@ -569,7 +569,7 @@ def get_rpe_status(id_atleta):
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT fecha, valor, notas
+                SELECT fecha, rpe, notas
                 FROM rpe
                 WHERE id_atleta = %s
                 ORDER BY fecha DESC
